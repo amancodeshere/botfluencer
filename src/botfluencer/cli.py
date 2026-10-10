@@ -57,7 +57,12 @@ def main() -> None:
             asyncio.run(database_command(settings, args.command))
     except ValidationError as error:
         # Pydantic's default repr includes the invalid input, which can be a secret.
-        fields = sorted({".".join(str(part) for part in item["loc"]) for item in error.errors()})
+        fields = sorted(
+            {
+                ".".join(str(part) for part in item["loc"]) or "runtime settings"
+                for item in error.errors()
+            }
+        )
         print(f"Invalid configuration: {', '.join(fields)}", file=sys.stderr)
         sys.exit(2)
     except Exception as error:

@@ -1,0 +1,12 @@
+*
+!Dockerfile
+!pyproject.toml
+!uv.lock
+!README.md
+!LICENSE
+!src/
+!src/**
+!fixtures/
+!fixtures/**
+**/__pycache__/
+**/*.pyc

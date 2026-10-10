@@ -1,0 +1,85 @@
+name: botfluencer
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: botfluencer
+      POSTGRES_PASSWORD: botfluencer
+      POSTGRES_DB: botfluencer
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-54320}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U botfluencer -d botfluencer"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  migrate:
+    image: botfluencer:local
+    pull_policy: never
+    command: ["botfluencer", "db", "upgrade"]
+    environment:
+      DATABASE_URL: postgresql://botfluencer:botfluencer@postgres:5432/botfluencer
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  app:
+    build: .
+    image: botfluencer:local
+    environment:
+      DATABASE_URL: postgresql://botfluencer:botfluencer@postgres:5432/botfluencer
+      BOT_NAMESPACE: ${BOT_NAMESPACE:-local-replay}
+      BOT_MODE: ${BOT_MODE:-replay}
+      BOT_ACCOUNTS: ${BOT_ACCOUNTS:-["mock-01"]}
+      BOT_POLL_INTERVAL_SECONDS: ${BOT_POLL_INTERVAL_SECONDS:-5}
+      BOT_OPERATION_TIMEOUT_SECONDS: ${BOT_OPERATION_TIMEOUT_SECONDS:-10}
+      BOT_HEARTBEAT_TIMEOUT_SECONDS: ${BOT_HEARTBEAT_TIMEOUT_SECONDS:-30}
+      BOT_MAX_ACTIONS_PER_HOUR: ${BOT_MAX_ACTIONS_PER_HOUR:-60}
+      BOT_ACCOUNT_COOLDOWN_SECONDS: ${BOT_ACCOUNT_COOLDOWN_SECONDS:-5}
+      BOT_MAX_LLM_CALLS_PER_HOUR: ${BOT_MAX_LLM_CALLS_PER_HOUR:-60}
+      BOT_MAX_ACTION_ATTEMPTS: ${BOT_MAX_ACTION_ATTEMPTS:-3}
+      BOT_RETRY_BASE_SECONDS: ${BOT_RETRY_BASE_SECONDS:-2}
+      BOT_FIXTURE_PATH: /app/fixtures/feed.jsonl
+      PORT: "8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/worker', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m
+    stop_grace_period: 20s
+    restart: unless-stopped
+
+  postgres-test:
+    profiles: ["test"]
+    image: postgres:16
+    environment:
+      POSTGRES_USER: botfluencer
+      POSTGRES_PASSWORD: botfluencer
+      POSTGRES_DB: botfluencer_test
+    ports:
+      - "127.0.0.1:55433:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U botfluencer -d botfluencer_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  postgres-data:

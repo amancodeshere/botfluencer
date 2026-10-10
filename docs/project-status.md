@@ -13,9 +13,25 @@ operational reliability. Railway + Postgres, mock-only execution.
 3. Mock replay/observe runtime, versioned intents, bounded execution, safe retry
    backoff, timeout reconciliation, supervised HTTP health, and deployment handover.
 
-## Upcoming stages
+4. Non-root container, local Compose databases, Railway IaC scaffold, CI checks,
+   and deployment/operating runbooks.
 
-4. Container deployment, Railway setup, CI, and operating runbooks.
+## Verification and limits
+
+All 24 tests pass against Postgres 16 and 18. Ruff lint/format checks, strict mypy,
+Railway TypeScript validation, and Compose configuration validation pass.
+The non-root deployment image builds and runs migrations. Local Compose startup,
+worker health, persistent pause across container restart, resume, and unchanged
+action counts after restart have been verified. The local mock stack is running.
+
+Unit and real Postgres integration tests cover migration drift, deduplication,
+pause/budget durability, restart reconciliation, retry deadlines and caps,
+ownership loss, deployment overlap, and supervisor failure propagation.
+
+No Railway resources provisioned, code pushed, hosted monitor configured, or
+24-hour soak/backup restore completed. API and real LLM integration are pending.
+Mock receipts emulate an idempotent API; they do not prove the live API offers it.
+The scheduler is a conservative baseline, not a competition strategy or simulator.
 
 ## Next work package
 

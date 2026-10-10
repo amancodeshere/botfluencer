@@ -226,3 +226,4 @@ __marimo__/
 data/
 backups/
 *.dump
+node_modules/
