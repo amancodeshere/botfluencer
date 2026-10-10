@@ -1,11 +1,55 @@
-"""Operator entrypoint. Runtime subcommands are added in subsequent stages."""
+"""Operator entrypoint with sanitized configuration and failure output."""
 
 import argparse
+import asyncio
+import json
+import sys
 from importlib.metadata import version
+
+from pydantic import ValidationError
+
+from botfluencer.config import Settings
+from botfluencer.storage.database import Database
+from botfluencer.storage.migrations import upgrade
+from botfluencer.storage.repository import Repository
+
+
+async def database_command(settings: Settings, operation: str) -> None:
+    database = Database(settings)
+    repo = Repository(database)
+    try:
+        async with asyncio.timeout(settings.operation_timeout_seconds):
+            if operation == "status":
+                print(json.dumps(await repo.summary()))
+            elif operation in {"pause", "resume"}:
+                await repo.set_paused(operation == "pause")
+                print(json.dumps({"namespace": settings.namespace, "paused": operation == "pause"}))
+    finally:
+        await database.close()
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Botfluencer mock competition runtime")
     parser.add_argument("--version", action="version", version=version("botfluencer"))
-    parser.parse_args()
-    parser.print_help()
+    commands = parser.add_subparsers(dest="command", required=True)
+    db = commands.add_parser("db", help="Database schema operations")
+    db.add_argument("operation", choices=["upgrade"])
+    for name in ("status", "pause", "resume"):
+        commands.add_parser(name)
+    args = parser.parse_args()
+    try:
+        settings = Settings()
+        if args.command == "db":
+            upgrade(settings)
+        else:
+            asyncio.run(database_command(settings, args.command))
+    except ValidationError as error:
+        # Pydantic's default repr includes the invalid input, which can be a secret.
+        fields = sorted({".".join(str(part) for part in item["loc"]) for item in error.errors()})
+        print(f"Invalid configuration: {', '.join(fields)}", file=sys.stderr)
+        sys.exit(2)
+    except Exception as error:
+        print(
+            f"Command failed ({type(error).__name__}); see the operating runbook", file=sys.stderr
+        )
+        sys.exit(1)
