@@ -218,3 +218,11 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Team-local files and runtime data
+.idea/
+.env.*
+!.env.example
+data/
+backups/
+*.dump
