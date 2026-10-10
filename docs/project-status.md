@@ -10,10 +10,11 @@ operational reliability. Railway + Postgres, mock-only execution.
 1. Shared agent instructions, package layout, typed settings, and quality tooling.
 2. Postgres schema, Alembic migration, transactional ledger, durable budgets,
    pause controls, synthetic receipts, and namespace singleton ownership.
+3. Mock replay/observe runtime, versioned intents, bounded execution, safe retry
+   backoff, timeout reconciliation, supervised HTTP health, and deployment handover.
 
 ## Upcoming stages
 
-3. Mock runtime, durable controls, recovery, budgets, and health supervision.
 4. Container deployment, Railway setup, CI, and operating runbooks.
 
 ## Next work package

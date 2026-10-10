@@ -9,6 +9,8 @@ from importlib.metadata import version
 from pydantic import ValidationError
 
 from botfluencer.config import Settings
+from botfluencer.runtime.events import configure_logging
+from botfluencer.runtime.service import run_worker, serve
 from botfluencer.storage.database import Database
 from botfluencer.storage.migrations import upgrade
 from botfluencer.storage.repository import Repository
@@ -36,11 +38,21 @@ def main() -> None:
     db.add_argument("operation", choices=["upgrade"])
     for name in ("status", "pause", "resume"):
         commands.add_parser(name)
+    run = commands.add_parser("run", help="Run the mock worker without HTTP")
+    run.add_argument("--ticks", type=int, help="Stop after this many successful ticks")
+    commands.add_parser("serve", help="Supervise worker and HTTP health server")
     args = parser.parse_args()
+    if args.command == "run" and args.ticks is not None and args.ticks < 1:
+        parser.error("--ticks must be positive")
+    configure_logging()
     try:
         settings = Settings()
         if args.command == "db":
             upgrade(settings)
+        elif args.command == "run":
+            asyncio.run(run_worker(settings, args.ticks))
+        elif args.command == "serve":
+            asyncio.run(serve(settings))
         else:
             asyncio.run(database_command(settings, args.command))
     except ValidationError as error:

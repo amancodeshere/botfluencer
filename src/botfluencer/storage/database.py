@@ -12,6 +12,10 @@ from sqlalchemy.pool import NullPool
 from botfluencer.config import Settings
 
 
+class LeadershipBusy(RuntimeError):
+    pass
+
+
 class Database:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
@@ -47,7 +51,7 @@ class Database:
             )
             await connection.commit()
             if not acquired:
-                raise RuntimeError("Another worker owns this namespace; stop it before starting")
+                raise LeadershipBusy("Another worker owns this namespace; stop it before starting")
             try:
                 yield connection
             finally:
