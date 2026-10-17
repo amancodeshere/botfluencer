@@ -2,8 +2,11 @@
 
 ## Context
 
-Team enrolled; competition API access pending. Agreed scope: scaffolding and
-operational reliability. Railway + Postgres, mock-only execution.
+Team readiness verified in the authenticated portal on 17 October 2026. Team
+code, assigned side, and account allowances are configured in the ignored local
+`.env`; no credentials are committed. Network access remains opt-in and disabled.
+The official SDK 0.4.0 and 2026 getting-started guide are now available. Current
+scope: standards-aligned infrastructure and extension points, not a live campaign.
 
 ## Completed stages
 
