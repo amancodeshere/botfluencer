@@ -17,12 +17,12 @@ class Settings(BaseSettings):
     namespace: str = Field(default="local-replay", pattern=r"^[a-zA-Z0-9_-]{1,64}$")
     mode: Literal["replay", "observe", "live"] = "replay"
     platform_backend: Literal["mock", "ctn"] = "mock"
-    strategy: Literal["synthetic", "noop"] = "synthetic"
+    strategy: Literal["synthetic", "noop"] = "noop"
     bot_profiles_file: Path | None = None
     accounts: list[str] = Field(default_factory=lambda: ["mock-01"], min_length=1)
     poll_interval_seconds: float = Field(default=5, gt=0)
-    operation_timeout_seconds: float = Field(default=10, gt=0)
-    heartbeat_timeout_seconds: float = Field(default=30, gt=0)
+    operation_timeout_seconds: float = Field(default=30, gt=0)
+    heartbeat_timeout_seconds: float = Field(default=60, gt=0)
     max_actions_per_hour: int = Field(default=60, ge=0)
     account_cooldown_seconds: float = Field(default=5, ge=0)
     max_llm_calls_per_hour: int = Field(default=60, ge=0)

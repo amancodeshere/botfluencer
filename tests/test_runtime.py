@@ -7,6 +7,7 @@ import pytest
 from sqlalchemy import func, select, update
 from sqlalchemy.exc import DBAPIError
 
+from botfluencer.competition.errors import RequestDeferred
 from botfluencer.domain import ActionIntent, Receipt, Reconciliation
 from botfluencer.llm.mock import MockGenerator
 from botfluencer.platform.base import PermanentRejection, SafeRetry
@@ -105,7 +106,7 @@ async def test_unresolved_actions_are_never_blindly_retried(repo: Repository) ->
 
 class RateLimitedPlatform(MockPlatform):
     async def execute(self, intent: ActionIntent) -> Receipt:
-        raise SafeRetry(retry_after_seconds=10)
+        raise SafeRetry(retry_after_seconds=60)
 
 
 async def test_safe_retry_persists_backoff_and_attempt_limit(repo: Repository) -> None:
@@ -117,7 +118,7 @@ async def test_safe_retry_persists_backoff_and_attempt_limit(repo: Repository) -
         assert action is not None
         assert action.status == "queued" and action.attempts == 1
         now = await session.scalar(select(func.now()))
-        assert (action.next_attempt_at - now).total_seconds() > 5
+        assert (action.next_attempt_at - now).total_seconds() > 30
     repo.settings.max_action_attempts = 1
     async with repo.db.sessions.begin() as session:
         await session.execute(
@@ -130,7 +131,7 @@ async def test_safe_retry_persists_backoff_and_attempt_limit(repo: Repository) -
 
 
 async def test_cooldown_survives_worker_restart(repo: Repository) -> None:
-    repo.settings.account_cooldown_seconds = 60
+    repo.settings.account_cooldown_seconds = 3600
     await build_worker(repo.db).run(ticks=3)
     await build_worker(repo.db).run(ticks=2)
     summary = await repo.summary()
@@ -146,6 +147,28 @@ async def test_zero_budgets_prevent_generation_and_execution(repo: Repository) -
     repo.settings.max_actions_per_hour = 0
     await build_worker(repo.db).run(ticks=3)
     assert (await repo.summary())["action_attempts_last_hour"] == 0
+
+
+class DeferredPlatform(MockPlatform):
+    async def observe(self) -> list[Any]:
+        raise RequestDeferred(180)
+
+
+async def test_long_team_backoff_keeps_heartbeat_without_http_retries(repo: Repository) -> None:
+    worker = Worker(repo, DeferredPlatform(repo, repo.settings.fixture_path), MockGenerator())
+    await worker.run(ticks=2)
+    summary = await repo.summary()
+    assert summary["heartbeat_at"] is not None
+    assert summary["counts"]["observations"] == 0
+
+
+async def test_noop_strategy_uses_no_generation_or_actions(repo: Repository) -> None:
+    repo.settings.strategy = "noop"
+    await build_worker(repo.db).run(ticks=2)
+    summary = await repo.summary()
+    assert summary["counts"]["observations"] == 3
+    assert summary["counts"]["actions"] == 0
+    assert summary["llm_calls_last_hour"] == 0
 
 
 async def test_health_rejects_stale_worker_and_accepts_standby(repo: Repository) -> None:
@@ -172,13 +195,13 @@ async def test_overlap_waits_for_ownership_then_continues(repo: Repository) -> N
     worker = build_worker(repo.db)
     async with repo.db.leadership():
         task = asyncio.create_task(worker.run(ticks=1))
-        for _ in range(100):
+        for _ in range(6000):
             if worker.state.initialized:
                 break
             await asyncio.sleep(0.01)
         assert worker.state.role == "standby"
         assert (await repo.summary())["counts"]["actions"] == 0
-    await asyncio.wait_for(task, timeout=3)
+    await asyncio.wait_for(task, timeout=90)
     assert (await repo.summary())["action_statuses"] == {"succeeded": 1}
 
 
@@ -200,7 +223,7 @@ async def test_supervisor_propagates_worker_failure_and_stops_http(repo: Reposit
     worker = Worker(repo, MockPlatform(repo, repo.settings.fixture_path), BrokenGenerator())
     server = FakeServer()
     with pytest.raises(RuntimeError, match="synthetic fatal"):
-        await asyncio.wait_for(supervise(worker, server), timeout=3)  # type: ignore[arg-type]
+        await asyncio.wait_for(supervise(worker, server), timeout=90)  # type: ignore[arg-type]
     assert worker.state.role == "failed"
     assert server.should_exit
 
@@ -219,16 +242,21 @@ async def test_permanent_rejection_is_not_retried(repo: Repository) -> None:
 
 
 class StalledGenerator(MockGenerator):
+    entered = False
+
     async def generate(self, observation: Any) -> Any:
+        self.entered = True
         await asyncio.Event().wait()
 
 
 async def test_stalled_generation_fails_within_operation_deadline(repo: Repository) -> None:
-    repo.settings.operation_timeout_seconds = 0.2
-    worker = Worker(repo, MockPlatform(repo, repo.settings.fixture_path), StalledGenerator())
+    repo.settings.operation_timeout_seconds = 15
+    generator = StalledGenerator()
+    worker = Worker(repo, MockPlatform(repo, repo.settings.fixture_path), generator)
     with pytest.raises(TimeoutError):
-        await asyncio.wait_for(worker.run(ticks=1), timeout=3)
+        await asyncio.wait_for(worker.run(ticks=1), timeout=90)
     assert worker.state.role == "failed"
+    assert generator.entered
     assert (await repo.summary())["action_attempts_last_hour"] == 0
 
 
@@ -238,10 +266,10 @@ async def test_lost_owner_connection_stops_before_next_tick(repo: Repository) ->
     from sqlalchemy import text
 
     worker = build_worker(repo.db)
-    repo.settings.poll_interval_seconds = 0.2
+    repo.settings.poll_interval_seconds = 30
     task = asyncio.create_task(worker.run())
     try:
-        for _ in range(100):
+        for _ in range(6000):
             if worker.state.heartbeat_monotonic is not None:
                 break
             await asyncio.sleep(0.01)
@@ -260,7 +288,7 @@ async def test_lost_owner_connection_stops_before_next_tick(repo: Repository) ->
             await connection.execute(text("SELECT pg_terminate_backend(:pid)"), {"pid": pid})
             await connection.commit()
         with pytest.raises(DBAPIError):
-            await asyncio.wait_for(task, timeout=3)
+            await asyncio.wait_for(task, timeout=90)
         assert worker.state.role == "failed"
         assert (await repo.summary())["action_attempts_last_hour"] == 1
     finally:

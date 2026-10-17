@@ -1,5 +1,4 @@
 import hashlib
-from typing import Protocol
 
 from botfluencer.domain import Draft, ObservationInput
 
@@ -7,11 +6,9 @@ MOCK_PROMPT = "Produce a synthetic acknowledgement for operational testing. No e
 PROMPT_VERSION = hashlib.sha256(MOCK_PROMPT.encode()).hexdigest()
 
 
-class Generator(Protocol):
-    async def generate(self, observation: ObservationInput) -> Draft: ...
-
-
 class MockGenerator:
+    prompt_version = PROMPT_VERSION
+
     async def generate(self, observation: ObservationInput) -> Draft:
         return Draft(
             target_id=observation.external_id,

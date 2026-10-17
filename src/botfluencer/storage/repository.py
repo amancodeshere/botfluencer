@@ -71,7 +71,8 @@ class Repository:
                     .values(
                         namespace=self.namespace,
                         external_id=item.external_id,
-                        payload=item.model_dump(),
+                        # Keep default fixture payloads readable by the prior runtime.
+                        payload=item.model_dump(exclude_defaults=True),
                     )
                     .on_conflict_do_nothing(index_elements=["namespace", "external_id"])
                 )
@@ -116,7 +117,7 @@ class Repository:
                     account=account,
                     strategy_version=strategy_version,
                     prompt_version=prompt_version,
-                    rationale="Synthetic baseline for exercising the runtime only",
+                    rationale="Validated strategy draft; see recorded strategy and prompt versions",
                 )
                 .on_conflict_do_nothing(index_elements=["namespace", "key"])
                 .returning(Decision.id)
@@ -175,7 +176,7 @@ class Repository:
             session.add(UsageEvent(namespace=self.namespace, account=account, kind="llm_call"))
             return True
 
-    async def claim(self) -> ActionIntent | None:
+    async def claim(self, allowed_accounts: list[str] | None = None) -> ActionIntent | None:
         """Reserve an attempt and its budget before any adapter side effect."""
         async with self.db.sessions.begin() as session:
             control = await self._control(session)
@@ -191,7 +192,9 @@ class Repository:
                     Action.namespace == self.namespace,
                     Action.status == ActionStatus.QUEUED,
                     Action.next_attempt_at <= now,
-                    Action.account.in_(self.settings.accounts),
+                    Action.account.in_(
+                        self.settings.accounts if allowed_accounts is None else allowed_accounts
+                    ),
                 )
                 .order_by(Action.created_at, Action.id)
                 .with_for_update(skip_locked=True)

@@ -41,9 +41,9 @@ class Database:
                 await connection.execute(text("SELECT 1"))
 
     @asynccontextmanager
-    async def leadership(self) -> AsyncIterator[AsyncConnection]:
+    async def leadership(self, scope: str | None = None) -> AsyncIterator[AsyncConnection]:
         lock_key = int.from_bytes(
-            hashlib.sha256(self.settings.namespace.encode()).digest()[:8], signed=True
+            hashlib.sha256((scope or self.settings.namespace).encode()).digest()[:8], signed=True
         )
         async with self.lock_engine.connect() as connection:
             acquired = await connection.scalar(

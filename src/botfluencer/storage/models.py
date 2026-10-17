@@ -5,6 +5,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import (
     CheckConstraint,
     DateTime,
+    Float,
     ForeignKey,
     Index,
     String,
@@ -111,3 +112,16 @@ class MockReceipt(Base):
     external_id: Mapped[str] = mapped_column(String(128))
     payload: Mapped[dict[str, Any]] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class RequestBudget(Base):
+    """Team-wide pacing independent of bot account, experiment, and namespace."""
+
+    __tablename__ = "request_budgets"
+    __table_args__ = (CheckConstraint("interval_seconds > 0", name="request_interval_positive"),)
+    scope: Mapped[str] = mapped_column(String(64), primary_key=True)
+    bucket: Mapped[str] = mapped_column(String(32), primary_key=True)
+    interval_seconds: Mapped[float] = mapped_column(Float)
+    next_allowed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )

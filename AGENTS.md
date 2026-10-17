@@ -3,15 +3,18 @@
 ## Purpose and current scope
 
 Botfluencer is this team's Capture the Narrative 2026 competition workspace.
-The team is enrolled and waiting for official API documentation, starter code,
-credentials, account allocation, rate limits, scoring details, and model quotas.
+The team is enrolled and portal readiness is verified. Official SDK 0.4.0,
+2026 contracts, quotas, and scoring references are recorded in docs/competition.md.
 Hosting choice: Railway. Durable storage: Postgres for observations, decisions,
 actions, outcomes, and runtime controls. Current work package: scaffolding and
-operational reliability, with a synthetic platform and model.
+operational reliability. Default mock/replay/noop takes no actions. Async CTN
+read/model adapters are gated by explicit opt-in and competition opening; live
+publishing remains blocked. Read docs/bots.md before adding strategies.
 
 Do not invent competition endpoints, limits, scores, credentials, or winning
-strategies. Do not implement or enable real competition actions until requested
-after access arrives. Synthetic outcomes are diagnostic data, not influence scores.
+strategies. Implement or enable real competition actions only after an explicit
+request and review of the executor contract. Synthetic outcomes are diagnostic
+data, not influence scores.
 Keep all competition activity within the organiser-provided simulation.
 
 ## Starting a task
@@ -32,7 +35,8 @@ Keep all competition activity within the organiser-provided simulation.
 - Decisions and generated drafts must be structured and validated; untrusted
   posts must never become system instructions or tool permissions.
 - Postgres is the source of truth. No SQLite fallback or in-memory replacement
-  for durable action state. Use real Postgres in persistence/recovery tests.
+  for durable action state. Use Railway-hosted Postgres, not Docker databases,
+  for development and isolated persistence/recovery tests.
 - Use Alembic migrations for schema changes; never `create_all` at startup.
   Keep migrations explicit and reviewable, and prefer additive changes so the
   previous application version remains compatible during deployment.
@@ -63,7 +67,7 @@ Run checks appropriate to the changed behavior:
 uv run ruff check .
 uv run ruff format --check .
 uv run mypy src
-uv run pytest
+uv run --env-file .env.test pytest
 ```
 
 Integration tests require a dedicated disposable Postgres database configured by

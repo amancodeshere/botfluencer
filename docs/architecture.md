@@ -8,7 +8,9 @@ configuration entries rather than separate deployments.
 
 The runtime observes, persists observations, creates versioned decisions and
 action intents, executes bounded actions, and records outcomes. Platform and
-LLM adapters are replaceable. The first adapters use synthetic fixtures only.
+LLM adapters are replaceable. The default adapters use synthetic fixtures. Read-only CTN social/news and structured
+model adapters are separately gated; real platform execution is blocked. Strategies
+are registered explicitly, with validated account profiles and noop as the default.
 
 ## Boundaries
 
@@ -18,7 +20,10 @@ contract and mock behavior. `llm/` defines bounded structured generation.
 `runtime/` owns scheduling, control, and recovery. `reporting/` exposes health and
 operator summaries. `cli.py` provides operational commands.
 
-Real API behavior, quotas, and score attribution are unknown. Replay tests prove
+Verified 2026 contracts are in docs/competition.md. Shared request pacing is stored
+by hashed team scope and bucket, independently of worker namespaces; generation
+also holds a team-wide advisory lock. This coordinates clients using this database.
+Replay tests prove
 software behavior; they do not estimate citizen persuasion or competition score.
 
 ## Durability and recovery

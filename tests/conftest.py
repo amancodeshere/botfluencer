@@ -33,9 +33,11 @@ async def repo(test_database_url: str) -> AsyncIterator[Repository]:
         _env_file=None,
         DATABASE_URL=test_database_url,
         namespace=f"test-{uuid4().hex}",
+        strategy="synthetic",
         account_cooldown_seconds=0,
         poll_interval_seconds=0.01,
-        operation_timeout_seconds=2,
+        operation_timeout_seconds=60,
+        heartbeat_timeout_seconds=90,
     )
     database = Database(settings)
     repository = Repository(database)

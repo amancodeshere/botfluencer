@@ -5,13 +5,15 @@ from uuid import uuid4
 
 from sqlalchemy import text
 
+from botfluencer.competition.errors import InvalidGeneration, RequestDeferred
 from botfluencer.domain import ActionIntent, ActionStatus, ObservationInput
-from botfluencer.llm.mock import PROMPT_VERSION, Generator
+from botfluencer.llm.base import Generator
 from botfluencer.platform.base import PermanentRejection, Platform, SafeRetry
 from botfluencer.runtime.events import event
 from botfluencer.storage.database import LeadershipBusy
 from botfluencer.storage.repository import Repository
-from botfluencer.strategies.baseline import STRATEGY_VERSION, action_key
+from botfluencer.strategies.baseline import action_key
+from botfluencer.strategies.registry import STRATEGIES, load_profiles
 
 
 @dataclass
@@ -31,6 +33,8 @@ class Worker:
         self.id = uuid4()
         self.state = WorkerState()
         self.stop = asyncio.Event()
+        self.profiles = load_profiles(self.settings)
+        self.next_observation_at = 0.0
 
     def retry_delay(self, attempts: int, retry_after: float = 0) -> float:
         return float(
@@ -86,31 +90,59 @@ class Worker:
     async def tick(self) -> None:
         self.state.paused = await self.repo.is_paused()
         if not self.state.paused:
-            await self.repo.observe(await self.platform.observe())
+            if time.monotonic() >= self.next_observation_at:
+                try:
+                    await self.repo.observe(await self.platform.observe())
+                except RequestDeferred as deferred:
+                    self.next_observation_at = time.monotonic() + deferred.seconds
+                    event("observation_deferred")
             if self.settings.mode == "replay":
                 await self.reconcile()
                 for account in self.settings.accounts:
-                    observation = await self.repo.unplanned(
-                        account, STRATEGY_VERSION, PROMPT_VERSION
-                    )
-                    if observation is None or not await self.repo.reserve_generation(account):
+                    profile = self.profiles[account]
+                    if not profile.enabled:
                         continue
-                    draft = await self.generator.generate(
-                        ObservationInput.model_validate(observation.payload)
+                    strategy = STRATEGIES[profile.strategy]()
+                    prompt_version = self.generator.prompt_version
+                    observation = await self.repo.unplanned(
+                        account, strategy.version, prompt_version
                     )
+                    if observation is None:
+                        continue
+                    if strategy.uses_generator and not await self.repo.reserve_generation(account):
+                        continue
+                    try:
+                        draft = await strategy.decide(
+                            ObservationInput.model_validate(observation.payload), self.generator
+                        )
+                    except (InvalidGeneration, RequestDeferred):
+                        event("draft_skipped", account=account)
+                        continue
+                    if draft is None:
+                        continue
                     if draft.target_id != observation.external_id:
                         raise RuntimeError("Generated draft must target its source observation")
                     await self.repo.plan(
                         observation.id,
                         account,
                         action_key(
-                            self.repo.namespace, account, observation.external_id, PROMPT_VERSION
+                            self.repo.namespace,
+                            account,
+                            observation.external_id,
+                            prompt_version,
+                            strategy.version,
                         ),
-                        STRATEGY_VERSION,
-                        PROMPT_VERSION,
+                        strategy.version,
+                        prompt_version,
                         draft,
                     )
-                intent = await self.repo.claim()
+                intent = await self.repo.claim(
+                    [
+                        account
+                        for account, profile in self.profiles.items()
+                        if profile.enabled and profile.strategy != "noop"
+                    ]
+                )
                 if intent is not None:
                     await self.execute(intent)
         await self.repo.heartbeat(self.id)

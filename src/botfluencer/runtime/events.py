@@ -14,3 +14,5 @@ def event(name: str, **fields: Any) -> None:
 
 def configure_logging() -> None:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)

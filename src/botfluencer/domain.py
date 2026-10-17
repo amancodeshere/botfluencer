@@ -11,6 +11,8 @@ class ObservationInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
     external_id: str = Field(min_length=1, max_length=128)
     text: str = Field(min_length=1, max_length=2000)
+    source: Literal["fixture", "social", "news"] = "fixture"
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class Draft(BaseModel):

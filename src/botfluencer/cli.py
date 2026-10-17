@@ -9,6 +9,7 @@ from importlib.metadata import version
 from pydantic import ValidationError
 
 from botfluencer.config import Settings
+from botfluencer.reporting.doctor import doctor
 from botfluencer.runtime.events import configure_logging
 from botfluencer.runtime.service import run_worker, serve
 from botfluencer.storage.database import Database
@@ -41,9 +42,18 @@ def main() -> None:
     run = commands.add_parser("run", help="Run the mock worker without HTTP")
     run.add_argument("--ticks", type=int, help="Stop after this many successful ticks")
     commands.add_parser("serve", help="Supervise worker and HTTP health server")
+    check = commands.add_parser(
+        "doctor", help="Validate baseline setup without exposing credentials"
+    )
+    check.add_argument(
+        "--online", action="store_true", help="One read-only feed probe after opening"
+    )
+    check.add_argument("--llm", action="store_true", help="Also make one explicit model smoke call")
     args = parser.parse_args()
     if args.command == "run" and args.ticks is not None and args.ticks < 1:
         parser.error("--ticks must be positive")
+    if args.command == "doctor" and args.llm and not args.online:
+        parser.error("--llm requires --online")
     configure_logging()
     try:
         settings = Settings()
@@ -53,6 +63,11 @@ def main() -> None:
             asyncio.run(run_worker(settings, args.ticks))
         elif args.command == "serve":
             asyncio.run(serve(settings))
+        elif args.command == "doctor":
+            report = asyncio.run(doctor(settings, args.online, args.llm))
+            print(json.dumps(report))
+            if report.get("online", {}).get("status") == "blocked":
+                sys.exit(1)
         else:
             asyncio.run(database_command(settings, args.command))
     except ValidationError as error:

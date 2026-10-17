@@ -1,0 +1,7 @@
+# Public behavior only. Never put tokens, passwords, or the team code here.
+# These account IDs must also appear in BOT_ACCOUNTS.
+[[bots]]
+account = "mock-01"
+role = "baseline"
+strategy = "noop"
+enabled = true

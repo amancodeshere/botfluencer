@@ -109,3 +109,15 @@ async def test_namespace_cannot_be_reused_for_another_mode(repo: Repository) -> 
             await Repository(other).initialize()
     finally:
         await other.close()
+
+
+async def test_excluded_accounts_cannot_claim_persisted_intents(repo: Repository) -> None:
+    from botfluencer.runtime.service import build_worker
+
+    await plan(repo)
+    assert await repo.claim([]) is None
+    assert await repo.claim(["another-account"]) is None
+    repo.settings.strategy = "noop"
+    await build_worker(repo.db).run(ticks=1)
+    assert (await repo.summary())["action_statuses"] == {"queued": 1}
+    assert await repo.claim(["mock-01"]) is not None
