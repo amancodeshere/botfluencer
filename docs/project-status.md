@@ -3,7 +3,8 @@
 ## Current baseline — 17 October 2026
 
 Team readiness, side, and allowances were verified in the authenticated portal.
-The team code is configured only in ignored private local settings. SDK 0.4.0 is
+The team code is configured in ignored private local settings and an approved
+encrypted GitHub Actions repository secret. SDK 0.4.0 is
 pinned, and the verified 2026 sources are recorded in docs/competition.md.
 Competition access is gated until 19 October, 17:00 Australia/Sydney, and remains
 disabled locally. No social/news/model API requests, account creation, or publishing ran.
@@ -44,17 +45,18 @@ shared pacing, and shutdown behavior. Synthetic results are not competition scor
 ## Shared GitHub configuration
 
 Eleven non-sensitive repository variables are configured and verified, covering
-Railway resource identifiers and mock/noop defaults. The requested six Actions
-secrets are pending explicit export approval after automatic approval review
-blocked sending database credentials and private team settings to the public
-repository secret store. See docs/team-access.md for the inventory and teammate
-onboarding. No secret values have been uploaded by this stage.
+Railway resource identifiers and mock/noop defaults. All six approved Actions
+repository secrets are configured: application/test URLs, team code, assigned side,
+and both account allowances. Values were sent privately; verification reads only
+names and timestamps. See docs/team-access.md for the inventory and teammate
+onboarding. Personal Railway tokens and database admin credentials were not shared.
 
 ## Remaining limits / next stage
 
-No worker service deployed, code pushed, or live executor enabled. GitHub CI still
-needs the dedicated TEST_DATABASE_URL repository secret before integration runs
-can pass. Hosted handover, monitoring/alerts, a 24-hour soak, backup scheduling,
+No worker service deployed, code pushed, or live executor enabled. The required
+TEST_DATABASE_URL repository secret is configured; a hosted GitHub Actions run
+remains unverified until the local workflow commits are pushed. Hosted handover,
+monitoring/alerts, a 24-hour soak, backup scheduling,
 and a restore drill remain pending. Selective policies still need persisted skip
 decisions; returning None currently defers the same observation. No winning
 strategy is claimed.

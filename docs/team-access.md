@@ -6,8 +6,9 @@ secret and must never contain passwords, tokens, or database URLs.
 
 ## GitHub Actions inventory
 
-The requested secret inventory below is pending explicit export approval. Verify
-names with `gh secret list --repo amancodeshere/botfluencer`; never print values.
+All six repository secrets below were configured with explicit approval on
+17 October 2026. Values were transferred privately and only names/metadata verified.
+Verify names with `gh secret list --repo amancodeshere/botfluencer`; never print values.
 
 | Repository secret | Purpose |
 | --- | --- |
