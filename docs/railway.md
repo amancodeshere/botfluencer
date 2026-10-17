@@ -1,100 +1,61 @@
-# Railway deployment runbook
+# Railway runbook
 
-This repo is ready for a mock rehearsal deployment. No Railway project has been
-created or changed. Deploying/provisioning is a separate user-authorized step.
-Do not enable live competition mode: it is intentionally unavailable.
+## Existing resources
 
-## Shape
+The dedicated [botfluencer project](https://railway.com/project/05c6e05a-bbd5-4085-ab24-e21aa3758bd7)
+has one `Postgres` service in `production`, running Postgres 18. A password-protected
+public TCP endpoint is enabled for native development and isolated tests. Clients
+must use `sslmode=require`. Connection URLs are private Railway service variables.
 
-One application service, one Postgres service, one app replica. The app listens
-on Railway's `PORT` and stores all durable state in Postgres. The app needs no
-persistent filesystem volume. Keep Postgres storage persistent and configure
-database backups before using the rehearsal for anything important.
+| Variable on Postgres | Purpose |
+| --- | --- |
+| `BOTFLUENCER_DATABASE_URL` | Restricted application role, private network |
+| `BOTFLUENCER_DATABASE_PUBLIC_URL` | Same application database, public TLS |
+| `TEST_DATABASE_PUBLIC_URL` | Separate test database and restricted test role |
 
-The Dockerfile installs locked production dependencies and the package including
-migrations. It runs as a non-root user. Migrations run in a separate pre-deploy
-command, not during the image build or every worker startup.
+The template's original admin credentials remain for database administration.
+Application and tests use their own roles. Do not expose variables in logs or
+screenshots. `scripts/railway_env.py` captures only the selected URL into an ignored
+private file. Rotate credentials through an agreed maintenance procedure and
+refresh local files afterward.
 
-## Configuration as code
+No worker service has been provisioned or deployed. No Docker database is used.
+The root Dockerfile packages only the Python application for a future deployment.
 
-Railway's current documentation directs new services to Infrastructure as Code
-instead of legacy `railway.json`/`railway.toml`. This repo uses
-`.railway/railway.ts`. The Python app does not need Node; the optional infra
-tooling does.
+## Future worker deployment
 
-```sh
-npm --prefix .railway ci
-npm --prefix .railway run check
-```
+Creating/deploying the worker is a separate authorized stage. The example
+`.railway/worker.example.ts` is a proposed whole environment graph, not an
+import of the existing template. Do not apply it to this project: replacing the
+resource graph could replace or delete the existing database. Import and reconcile
+existing resources and review the complete CLI plan before any future IaC apply.
+Type checking the example does not establish deployment safety.
 
-When deployment is authorized, install Railway CLI 5.42.1 or newer, authenticate, and link
-this checkout to a **dedicated Botfluencer project/environment**. From the repo
-root, preview with `railway config plan`. Review the resource and variable changes
-before `railway config apply`. This file owns the environment's whole resource
-graph; omitted resources can be deleted. Do not apply it to a shared project.
-
-The config declares the existing GitHub repo on `main`. Commits must be pushed
-before Railway can deploy them; this scaffolding task only created local commits.
-IaC is evaluated by CLI plan/apply, not automatically by every GitHub deploy.
-After applying, inspect the actual build/deploy settings in Railway. The config
-explicitly selects the root Dockerfile as the build source.
-
-## Required settings
+Configure the future worker with:
 
 | Setting | Value |
 | --- | --- |
-| Database URL | Reference to the Postgres service's `DATABASE_URL` |
 | Build | Root Dockerfile |
-| Pre-deploy command | `botfluencer db upgrade` |
-| Pre-deploy timeout | 120 seconds |
-| Start command | `botfluencer serve` |
-| Healthcheck path | `/health/ready` |
-| Healthcheck timeout | 120 seconds |
+| Pre-deploy | `botfluencer db upgrade`, timeout 120 seconds |
+| Start | `botfluencer serve` |
+| Database | Reference `${{Postgres.BOTFLUENCER_DATABASE_URL}}` |
+| Healthcheck | `/health/ready`, timeout 120 seconds |
 | Replicas | 1 |
-| Restart policy | On failure, up to 10 retries |
-| Serverless/sleep | Disabled |
-| Drain time | 20 seconds |
-| Mode | `BOT_MODE=replay` |
-| Namespace | Stable namespace derived from the environment ID |
+| Restart | On failure, maximum 10 retries |
+| Sleep | Disabled |
+| Drain | 20 seconds |
+| Initial backend / mode / strategy | `mock` / `replay` / `noop` |
+| Namespace | Stable, unique to environment and workload |
 
-Use the direct Postgres connection, not transaction-mode PgBouncer: worker
-ownership uses a session advisory lock on a dedicated physical connection.
-Keep the database private; use the public connection only for an explicitly
-needed local operation. Never copy a production URL into commands or Git.
+Use Railway secret/reference variables for team credentials. Set
+`CTN_NETWORK_ENABLED=false` initially. Competition observation later requires a
+separate namespace, backend `ctn`, mode `observe`, explicit network opt-in, and the
+opening gate. Live publishing is blocked in code.
 
-## Readiness and handover
+Deployment readiness permits standby during overlap. Monitor `/health/worker`
+with handover grace for ongoing health; Railway's deployment check is not an
+ongoing watchdog. Inspect logs after exhausted restart retries.
 
-`/health/ready` verifies initialized storage and either active/fresh worker state
-or standby state. A standby process takes no actions. Railway can pass readiness,
-switch deployments, and stop the old process; the replacement acquires ownership
-on its next poll. Requiring ownership for deployment readiness would prevent the
-old process from being stopped during normal deployment overlap.
-
-`/health/worker` requires ownership, a recent completed tick, and database access.
-Configure ongoing uptime monitoring against this endpoint with a handover grace
-period. Railway only uses its deployment healthcheck during startup, not as an
-ongoing watchdog. Fatal worker errors exit the process to trigger restart policy.
-After retries are exhausted, inspect the deployment/logs and fix the underlying
-configuration, schema, database, or adapter issue before restarting.
-
-## Rehearsal acceptance
-
-1. Confirm pre-deploy migrations succeed and `/health/worker` becomes healthy.
-2. Check `botfluencer status` through an authenticated Railway shell/SSH session.
-3. Pause, restart, and confirm the pause persists and heartbeat continues.
-4. Resume; confirm fixture actions complete once and further restarts don't repeat
-   them. Redeploy once to verify standby handover in the actual Railway environment.
-5. Run for 24 hours while recording heartbeat availability and restart events.
-6. Enable backups and restore a backup into a separate rehearsal database.
-
-The local tests and container smoke checks are shorter checks. They do not mean
-a 24-hour Railway rehearsal, hosted monitoring, or backup restore has been done.
-
-## Sources checked for this scaffold
-
-- [Infrastructure as Code](https://docs.railway.com/infrastructure-as-code)
-- [IaC reference](https://docs.railway.com/infrastructure-as-code/reference)
-- [Pre-deploy commands](https://docs.railway.com/deployments/pre-deploy-command)
-- [Deployment healthchecks](https://docs.railway.com/deployments/healthchecks)
-
-Recheck provider documentation when changing deployment behavior.
+Before competition use, verify hosted handover, pause/restart persistence, a 24-hour
+soak, alerting, backup scheduling, and restore into a separate database. These
+hosted operational checks remain pending.

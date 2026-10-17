@@ -1,43 +1,55 @@
 # Project status
 
-## Context
+## Current baseline — 17 October 2026
 
-Team readiness verified in the authenticated portal on 17 October 2026. Team
-code, assigned side, and account allowances are configured in the ignored local
-`.env`; no credentials are committed. Network access remains opt-in and disabled.
-The official SDK 0.4.0 and 2026 getting-started guide are now available. Current
-scope: standards-aligned infrastructure and extension points, not a live campaign.
+Team readiness, side, and allowances were verified in the authenticated portal.
+The team code is configured only in ignored private local settings. SDK 0.4.0 is
+pinned, and the verified 2026 sources are recorded in docs/competition.md.
+Competition access is gated until 19 October, 17:00 Australia/Sydney, and remains
+disabled locally. No social/news/model API requests, account creation, or publishing ran.
 
-## Completed stages
+## Completed
 
-1. Shared agent instructions, package layout, typed settings, and quality tooling.
-2. Postgres schema, Alembic migration, transactional ledger, durable budgets,
-   pause controls, synthetic receipts, and namespace singleton ownership.
-3. Mock replay/observe runtime, versioned intents, bounded execution, safe retry
-   backoff, timeout reconciliation, supervised HTTP health, and deployment handover.
+- Typed Python 3.13/uv package, shared AGENTS.md, versioned ledger and migrations.
+- Durable observation, decision, action, outcome, controls, budgets, cooldowns,
+  ambiguous-result recovery, singleton ownership, supervised health, and handover.
+- Async CTN read/model adapter boundaries, validated generation, opening/opt-in
+  guards, team-wide persisted request pacing, and serialized model access.
+- Explicit strategy registry and validated per-account profiles; noop is the
+  default and cannot claim older queued actions. Synthetic replay stays opt-in.
+- One approved Railway Postgres 18 service with an approved public TLS endpoint.
+  Application/test databases have separate non-superuser roles; the test role
+  cannot connect to the application database. Both schemas migrated to 0002.
+- Private local environment helpers and native startup instructions. Docker
+  database workflows removed. The Dockerfile remains future app packaging only.
+- CI separates static/unit checks from hosted Postgres integration checks and
+  fails clearly without the required test secret. Infrastructure example renamed
+  to prevent treating it as an imported graph for the existing database.
+- Supervisor owns termination signals and drains work before exiting.
 
-4. Non-root container, local Compose databases, Railway IaC scaffold, CI checks,
-   and deployment/operating runbooks.
+## Verification
 
-## Verification and limits
+Ruff lint/format, strict mypy, infrastructure TypeScript checks, credential scans,
+and private-file permissions pass. Three finite noop ticks ran against the Railway
+application database. All 45 tests pass: 21 unit tests and 24 integration tests
+against Railway Postgres 18. Integration groups use independent synthetic namespaces.
+The final payload compatibility/noop test also passed after the last storage change.
+All three health endpoints returned 200; SIGTERM drained and exited with code 0.
 
-All 24 tests pass against Postgres 16 and 18. Ruff lint/format checks, strict mypy,
-Railway TypeScript validation, and Compose configuration validation pass.
-The non-root deployment image builds and runs migrations. Local Compose startup,
-worker health, persistent pause across container restart, resume, and unchanged
-action counts after restart have been verified. The local mock stack is running.
+Tests cover migration drift, deduplication, pause and budget durability, ambiguous
+acceptance, retry scheduling, cooldowns, singleton ownership and ownership loss,
+overlap, stale readiness, worker failure, deferred feeds, profiles, model contracts,
+shared pacing, and shutdown behavior. Synthetic results are not competition scores.
 
-Unit and real Postgres integration tests cover migration drift, deduplication,
-pause/budget durability, restart reconciliation, retry deadlines and caps,
-ownership loss, deployment overlap, and supervisor failure propagation.
+## Remaining limits / next stage
 
-No Railway resources provisioned, code pushed, hosted monitor configured, or
-24-hour soak/backup restore completed. API and real LLM integration are pending.
-Mock receipts emulate an idempotent API; they do not prove the live API offers it.
-The scheduler is a conservative baseline, not a competition strategy or simulator.
+No worker service deployed, code pushed, or live executor enabled. GitHub CI still
+needs the dedicated TEST_DATABASE_URL repository secret before integration runs
+can pass. Hosted handover, monitoring/alerts, a 24-hour soak, backup scheduling,
+and a restore drill remain pending. Selective policies still need persisted skip
+decisions; returning None currently defers the same observation. No winning
+strategy is claimed.
 
-## Next work package
-
-Review official 2026 API/templates once received; adapt the real platform and
-supplied model, then run a conservative baseline. Do not infer account counts
-or limits from older competitions.
+Future work: implement and evaluate team bot strategies behind the existing
+registry, recheck organiser changes, verify read/model probes after opening, and
+review real write/reconciliation guarantees before explicitly enabling publishing.

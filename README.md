@@ -1,58 +1,66 @@
 # Botfluencer
 
-Team workspace for Capture the Narrative 2026. Current scope: repo scaffolding,
-Postgres persistence, and operational reliability. Competition access is pending.
-The platform and language model are deliberately mocked; no competition actions
-or external model calls are implemented.
+Capture the Narrative 2026 team workspace. Python 3.13, uv, and Railway-hosted
+Postgres provide a durable baseline for future bot strategies. The official SDK
+is pinned to 0.4.0; async adapters follow its documented wire contracts.
 
-## Start locally
+The default is `mock` + `replay` + `noop`: fixture observations are persisted,
+without generated drafts or actions. Real publishing remains unavailable.
 
-```sh
-cp .env.example .env
-docker compose up --build -d
-curl --fail http://localhost:8000/health/worker
-docker compose exec app botfluencer status
-```
+## Get running
 
-Start Docker Desktop first. Compose runs Postgres, applies migrations, and starts
-the supervised mock worker. State persists in the Postgres volume across restarts.
-
-## Development
-
-Use Python 3.13 and [uv](https://docs.astral.sh/uv/). Read [AGENTS.md](AGENTS.md)
-before making changes.
+Read [AGENTS.md](AGENTS.md) before changing the project. Install Python 3.13,
+[uv](https://docs.astral.sh/uv/), and the Railway CLI, then authenticate and link
+this checkout to the team's existing `botfluencer` project and production environment.
+Do not create a second database service.
 
 ```sh
 uv sync --locked
-uv run botfluencer --help
+# New teammates only: copy the template without overwriting existing secrets.
+cp -n .env.example .env
+uv run python scripts/railway_env.py --service Postgres
+uv run python scripts/railway_env.py --service Postgres --test
+uv run botfluencer db upgrade
+uv run botfluencer doctor
+uv run botfluencer run --ticks 3
+uv run botfluencer serve
+```
+
+The helpers capture Railway variables privately and create `.env` / `.env.test`
+with mode 0600. Request project access from a teammate; never share URLs in Git
+or chat. Add your team code and assigned side privately if competition access is
+needed later. The public TCP connection requires TLS and database authentication.
+There is no Docker database or local fallback.
+
+```sh
+curl --fail http://localhost:8000/health/worker
+uv run botfluencer status
+uv run botfluencer pause
+uv run botfluencer resume
+```
+
+## Verify
+
+```sh
 uv run ruff check .
 uv run ruff format --check .
 uv run mypy src
-docker compose --profile test up -d --wait postgres-test
-TEST_DATABASE_URL=postgresql://botfluencer:botfluencer@localhost:55433/botfluencer_test uv run pytest
+uv run --env-file .env.test pytest
+npm --prefix .railway ci
+npm --prefix .railway run check
 ```
 
-Keep credentials in environment variables or an ignored `.env`; commit only the
-placeholder `.env.example`.
+Tests require the dedicated `botfluencer_test` database. They must never use the
+application database. CI requires a `TEST_DATABASE_URL` repository secret and
+serializes integration runs. Read [operations](docs/operations.md) for details.
 
 ## Team references
 
-- [Agent instructions](AGENTS.md): shared context, scope, and collaboration rules.
-- [Architecture](docs/architecture.md): ledger, recovery, and deployment ownership.
-- [Operations](docs/operations.md): native execution, pause/resume, tests, and backups.
-- [Railway deployment](docs/railway.md): rehearsal infrastructure and hosted checks.
-- [Project status](docs/project-status.md): completed work and remaining limitations.
+- [Architecture](docs/architecture.md): ledger, recovery, ownership, and boundaries.
+- [Competition standards](docs/competition.md): verified 2026 contracts and limits.
+- [Bot extension guide](docs/bots.md): strategies, profiles, and versioning.
+- [Railway runbook](docs/railway.md): existing database and future worker deployment.
+- [Project status](docs/project-status.md): checks, limitations, and next steps.
 
-## Available commands
-
-`botfluencer db upgrade`, `run --ticks N`, `serve`, `status`, `pause`, and `resume`.
-Run them via `uv run`, Compose exec, or an authenticated Railway shell. Public
-HTTP routes expose health only; there is no unauthenticated control API.
-
-Replay creates synthetic decisions/actions/outcomes; observe only stores fixture
-observations. Live mode is blocked. No external LLM is called. Hourly budgets and
-cooldowns are local operational caps, not official competition limits. Unknown
-actions require reconciliation and are never blindly retried.
-
-Railway files describe one app and one Postgres service. They have not been applied,
-and the repo has not been pushed by this scaffolding task.
+A database service is provisioned. No hosted worker has been deployed, code pushed,
+or competition account created. Synthetic outcomes describe execution, not score.

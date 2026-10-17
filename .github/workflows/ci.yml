@@ -10,23 +10,6 @@ permissions:
 jobs:
   python:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        postgres: [16, 18]
-    services:
-      postgres:
-        image: postgres:${{ matrix.postgres }}
-        env:
-          POSTGRES_USER: botfluencer
-          POSTGRES_PASSWORD: botfluencer
-          POSTGRES_DB: botfluencer_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U botfluencer -d botfluencer_test"
-          --health-interval 2s --health-timeout 3s --health-retries 30
-    env:
-      TEST_DATABASE_URL: postgresql://botfluencer:botfluencer@localhost:5432/botfluencer_test
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
@@ -36,9 +19,24 @@ jobs:
       - run: uv run ruff check .
       - run: uv run ruff format --check .
       - run: uv run mypy src
-      - run: uv run pytest
-      - run: docker build -t botfluencer:ci .
-      - run: docker run --rm botfluencer:ci botfluencer --version
+      - run: uv run pytest -m 'not integration'
+
+  integration:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: railway-postgres-integration
+      cancel-in-progress: false
+    env:
+      TEST_DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.11.5"
+      - run: uv sync --locked
+      - name: Require isolated hosted database
+        run: test -n "$TEST_DATABASE_URL" || { echo 'Configure the dedicated TEST_DATABASE_URL repository secret'; exit 1; }
+      - run: uv run pytest -m integration
 
   infrastructure:
     runs-on: ubuntu-latest
