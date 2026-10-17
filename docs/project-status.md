@@ -41,6 +41,15 @@ acceptance, retry scheduling, cooldowns, singleton ownership and ownership loss,
 overlap, stale readiness, worker failure, deferred feeds, profiles, model contracts,
 shared pacing, and shutdown behavior. Synthetic results are not competition scores.
 
+## Shared GitHub configuration
+
+Eleven non-sensitive repository variables are configured and verified, covering
+Railway resource identifiers and mock/noop defaults. The requested six Actions
+secrets are pending explicit export approval after automatic approval review
+blocked sending database credentials and private team settings to the public
+repository secret store. See docs/team-access.md for the inventory and teammate
+onboarding. No secret values have been uploaded by this stage.
+
 ## Remaining limits / next stage
 
 No worker service deployed, code pushed, or live executor enabled. GitHub CI still

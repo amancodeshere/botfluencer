@@ -58,6 +58,10 @@ or competition data. Never print connection strings or raw exception details
 that might contain secrets. Use sanitized synthetic fixtures in tests.
 Runtime logs should identify events and IDs without dumping content or prompts.
 Use Railway secrets/reference variables for deployment credentials.
+Read docs/team-access.md before changing shared settings. GitHub Actions secrets
+are write-only workflow inputs, not a downloadable teammate credential vault.
+Keep application/admin/team secrets out of test jobs; integration CI needs only
+TEST_DATABASE_URL. Never expose secrets through logs or downloadable artifacts.
 
 ## Verification and commits
 

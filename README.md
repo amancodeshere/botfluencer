@@ -56,6 +56,7 @@ serializes integration runs. Read [operations](docs/operations.md) for details.
 
 ## Team references
 
+- [Team access](docs/team-access.md): GitHub secrets, shared settings, and teammate onboarding.
 - [Architecture](docs/architecture.md): ledger, recovery, ownership, and boundaries.
 - [Competition standards](docs/competition.md): verified 2026 contracts and limits.
 - [Bot extension guide](docs/bots.md): strategies, profiles, and versioning.
