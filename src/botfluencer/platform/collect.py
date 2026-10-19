@@ -2,6 +2,7 @@
 
 import asyncio
 from collections.abc import AsyncIterator
+from datetime import datetime
 from typing import Any
 
 import httpx
@@ -17,9 +18,18 @@ from botfluencer.storage.npc_posts import PostArchive, PostRecord
 
 
 class PostCollector:
-    def __init__(self, transport: CompetitionTransport, archive: PostArchive) -> None:
+    def __init__(
+        self,
+        transport: CompetitionTransport,
+        archive: PostArchive,
+        *,
+        npc_before: datetime | None = None,
+    ) -> None:
         self.transport = transport
         self.archive = archive
+        if npc_before is not None and npc_before.utcoffset() is None:
+            raise ValueError("NPC cutoff requires an explicit timezone")
+        self.npc_before = npc_before
 
     async def read(self, path: str, bucket: str, params: dict[str, str | int]) -> Any:
         failures = 0
@@ -47,7 +57,7 @@ class PostCollector:
         cursor: str | None = None
         seen: set[str] = set()
         for _ in range(max_pages):
-            params: dict[str, str | int] = {"limit": 50}
+            params: dict[str, str | int] = {"limit": 200 if path == "/posts" else 50}
             if path == "/posts":
                 params["sort"] = "recent"
             if cursor is not None:
@@ -88,12 +98,19 @@ class PostCollector:
                 )
                 for post in page
             ]
+            if self.npc_before is not None:
+                for record in records:
+                    if record.time_stamp < self.npc_before:
+                        record.npc_status = "npc"
             inserted += await self.archive.save(records)
             for record in records:
                 by_author.setdefault(record.author_id, []).append(record)
             seen += len(records)
             page_count += 1
             event("npc_posts_page", pages=page_count, seen=seen, inserted=inserted)
+
+        if self.npc_before is not None:
+            await self.archive.label_npc_before(self.npc_before)
 
         def resolve(author_id: int, profile: dict[str, Any]) -> list[PostRecord]:
             records = by_author.pop(author_id)
@@ -145,13 +162,17 @@ class PostCollector:
             "seen": seen,
             "inserted": inserted,
             "complete": True,
-            "classification": "unverified",
+            "npc_before": self.npc_before.isoformat() if self.npc_before else "",
             "authors_without_profile": unavailable,
         }
 
 
 async def collect_posts(
-    settings: Settings, namespace: str, max_pages: int, deadline_seconds: float
+    settings: Settings,
+    namespace: str,
+    max_pages: int,
+    deadline_seconds: float,
+    npc_before: datetime | None = None,
 ) -> dict[str, int | bool | str]:
     if not settings.ctn_network_enabled:
         raise ValueError("Enable network access explicitly for this read-only collection")
@@ -161,9 +182,9 @@ async def collect_posts(
     try:
         async with asyncio.timeout(deadline_seconds):
             async with database.leadership("npc-posts:" + namespace):
-                return await PostCollector(transport, PostArchive(database, namespace)).collect(
-                    max_pages
-                )
+                return await PostCollector(
+                    transport, PostArchive(database, namespace), npc_before=npc_before
+                ).collect(max_pages)
     finally:
         await transport.close()
         await database.close()

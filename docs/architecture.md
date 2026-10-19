@@ -65,6 +65,6 @@ an already reserved/in-flight call may finish.
 
 `npc_posts` is an independent read-only archive, with the requested author names,
 body, and original UTC creation time. Namespace plus source post ID deduplicates
-reruns. It does not create decisions or actions. API profiles have no NPC marker,
-so all collected authors remain unverified. See post-collection.md for capture
+reruns. It does not create decisions or actions. NPC labels support an explicit team-confirmed
+timestamp cutoff; the initial capture uses 18:00 Sydney on 19 October 2026. See post-collection.md for capture
 commands, source coverage, restart behavior, and limits.

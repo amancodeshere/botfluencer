@@ -4,6 +4,7 @@ import argparse
 import asyncio
 import json
 import sys
+from datetime import datetime
 from importlib.metadata import version
 
 from pydantic import ValidationError
@@ -57,6 +58,11 @@ def main() -> None:
         "--allow-network", action="store_true", help="Opt in for this read-only run"
     )
     collect.add_argument("--namespace", default="ctn-2026")
+    collect.add_argument(
+        "--npc-before",
+        type=datetime.fromisoformat,
+        help="Team-confirmed NPC cutoff, ISO timestamp with timezone",
+    )
     collect.add_argument("--max-pages", type=int, default=1000)
     collect.add_argument("--timeout-seconds", type=float, default=900)
     args = parser.parse_args()
@@ -81,7 +87,11 @@ def main() -> None:
                 json.dumps(
                     asyncio.run(
                         collect_posts(
-                            settings, args.namespace, args.max_pages, args.timeout_seconds
+                            settings,
+                            args.namespace,
+                            args.max_pages,
+                            args.timeout_seconds,
+                            args.npc_before,
                         )
                     )
                 )

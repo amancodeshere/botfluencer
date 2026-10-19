@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -22,13 +23,16 @@ def post(post_id: int = 1, *, body: str | None = "Synthetic post") -> dict[str, 
     }
 
 
-def collector(responses: list[object]) -> tuple[PostCollector, MagicMock, MagicMock]:
+def collector(
+    responses: list[object], *, npc_before: datetime | None = None
+) -> tuple[PostCollector, MagicMock, MagicMock]:
     transport = MagicMock(spec=CompetitionTransport)
     transport.request = AsyncMock(side_effect=responses)
     archive = MagicMock(spec=PostArchive)
     archive.namespace = "synthetic"
+    archive.label_npc_before = AsyncMock(return_value=0)
     archive.save = AsyncMock(side_effect=lambda rows, **kwargs: len(rows))
-    return PostCollector(transport, archive), transport, archive
+    return PostCollector(transport, archive, npc_before=npc_before), transport, archive
 
 
 async def test_collects_cursor_pages_and_empty_reposts_without_claiming_npc_identity() -> None:
@@ -117,6 +121,8 @@ async def test_archive_rerun_deduplicates_and_namespaces_remain_separate(repo: R
         assert stored is not None
         assert stored.post == "Synthetic post" and stored.user_name == "synthetic"
 
+    assert await archive.label_npc_before(record.time_stamp) == 0
+    assert await archive.label_npc_before(record.time_stamp + timedelta(minutes=20)) == 1
     other = PostArchive(repo.db, repo.namespace + "-other")
     assert await other.save([record]) == 1
     async with repo.db.sessions() as session:
@@ -128,3 +134,28 @@ async def test_archive_rerun_deduplicates_and_namespaces_remain_separate(repo: R
         )
     with pytest.raises(ValidationError):
         PostRecord.model_validate(record.model_dump() | {"time_stamp": None})
+
+
+async def test_team_confirmed_npc_cutoff_is_exclusive_and_timezone_aware() -> None:
+    cutoff = datetime.fromisoformat("2026-10-19T18:00:00+11:00")
+    at_cutoff = post(2) | {"created_at": cutoff.isoformat()}
+    item, _, archive = collector(
+        [
+            {"items": [post(), at_cutoff], "next_cursor": None},
+            {
+                "items": [{"account_id": 10, "username": "synthetic", "display_name": "Test"}],
+                "next_cursor": None,
+            },
+        ],
+        npc_before=cutoff,
+    )
+    await item.collect(10)
+    records = archive.save.call_args_list[0].args[0]
+    assert records[0].npc_status == "npc"
+    assert records[1].npc_status == "unverified"
+    archive.label_npc_before.assert_awaited_once_with(cutoff)
+
+
+def test_naive_npc_cutoff_is_rejected() -> None:
+    with pytest.raises(ValueError, match="timezone"):
+        collector([], npc_before=datetime(2026, 10, 19, 18))

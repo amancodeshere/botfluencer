@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from typing import Literal
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validator
-from sqlalchemy import func
+from sqlalchemy import func, update
 from sqlalchemy.dialects.postgresql import insert
 
 from botfluencer.storage.database import Database
@@ -58,4 +58,20 @@ class PostArchive:
                     index_elements=["namespace", "post_id"]
                 )
             ids = await session.scalars(statement.returning(NPCPost.post_id))
+            return len(list(ids))
+
+    async def label_npc_before(self, cutoff: datetime) -> int:
+        if cutoff.utcoffset() is None:
+            raise ValueError("NPC cutoff requires an explicit timezone")
+        async with self.database.sessions.begin() as session:
+            ids = await session.scalars(
+                update(NPCPost)
+                .where(
+                    NPCPost.namespace == self.namespace,
+                    NPCPost.time_stamp < cutoff,
+                    NPCPost.npc_status == "unverified",
+                )
+                .values(npc_status="npc")
+                .returning(NPCPost.post_id)
+            )
             return len(list(ids))

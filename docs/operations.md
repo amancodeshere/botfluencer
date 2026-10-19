@@ -84,5 +84,5 @@ drill are pending; no completed restore is claimed. Never commit exports or dump
 
 Use `uv run botfluencer collect-npc-posts --allow-network` for a one-shot archive
 into npc_posts after migrations. See [post collection](post-collection.md) for
-coverage, UTC timestamps, deduplication, and the unverified NPC classification.
+coverage, UTC timestamps, deduplication, and the team-confirmed NPC cutoff.
 This does not run the worker or enable publishing.
