@@ -1,13 +1,15 @@
 # Project status
 
-## Current baseline — 17 October 2026
+## Current baseline — 19 October 2026
 
 Team readiness, side, and allowances were verified in the authenticated portal.
 The team code is configured in ignored private local settings and an approved
-encrypted GitHub Actions repository secret. SDK 0.4.0 is
+encrypted GitHub Actions repository secret. SDK 0.5.0 is
 pinned, and the verified 2026 sources are recorded in docs/competition.md.
 Competition access is gated until 19 October, 17:00 Australia/Sydney, and remains
-disabled locally. No social/news/model API requests, account creation, or publishing ran.
+disabled in the normal worker configuration. An explicitly authorized read-only
+social API collection is now running. No model requests, account creation, or
+publishing were performed.
 
 ## Completed
 
@@ -20,20 +22,24 @@ disabled locally. No social/news/model API requests, account creation, or publis
   default and cannot claim older queued actions. Synthetic replay stays opt-in.
 - One approved Railway Postgres 18 service with an approved public TLS endpoint.
   Application/test databases have separate non-superuser roles; the test role
-  cannot connect to the application database. Both schemas migrated to 0002.
+  cannot connect to the application database. Both schemas migrated to 0003, including the new npc_posts archive.
 - Private local environment helpers and native startup instructions. Docker
   database workflows removed. The Dockerfile remains future app packaging only.
 - CI separates static/unit checks from hosted Postgres integration checks and
   fails clearly without the required test secret. Infrastructure example renamed
   to prevent treating it as an imported graph for the existing database.
 - Supervisor owns termination signals and drains work before exiting.
+- Read-only cursor-paginated post archive with author names, original UTC times,
+  preserved empty reposts, deduplicated reruns, and explicit unverified NPC status.
 
 ## Verification
 
 Ruff lint/format, strict mypy, infrastructure TypeScript checks, credential scans,
 and private-file permissions pass. Three finite noop ticks ran against the Railway
-application database. All 45 tests pass: 21 unit tests and 24 integration tests
-against Railway Postgres 18. Integration groups use independent synthetic namespaces.
+application database. The 17 October baseline passed 45 tests: 21 unit tests and
+24 integration tests against Railway Postgres 18. On 19 October, after updating
+to SDK 0.5.0, all 25 unit tests and the new archive integration test passed,
+including migration drift, deduplication, restart reuse, and namespace isolation. Integration groups use independent synthetic namespaces.
 The final payload compatibility/noop test also passed after the last storage change.
 All three health endpoints returned 200; SIGTERM drained and exited with code 0.
 
@@ -60,6 +66,9 @@ monitoring/alerts, a 24-hour soak, backup scheduling,
 and a restore drill remain pending. Selective policies still need persisted skip
 decisions; returning None currently defers the same observation. No winning
 strategy is claimed.
+
+The live archive collection is in progress; its final counts will be recorded
+after cursor exhaustion and database verification.
 
 Future work: implement and evaluate team bot strategies behind the existing
 registry, recheck organiser changes, verify read/model probes after opening, and

@@ -9,6 +9,7 @@ from importlib.metadata import version
 from pydantic import ValidationError
 
 from botfluencer.config import Settings
+from botfluencer.platform.collect import collect_posts
 from botfluencer.reporting.doctor import doctor
 from botfluencer.runtime.events import configure_logging
 from botfluencer.runtime.service import run_worker, serve
@@ -49,6 +50,15 @@ def main() -> None:
         "--online", action="store_true", help="One read-only feed probe after opening"
     )
     check.add_argument("--llm", action="store_true", help="Also make one explicit model smoke call")
+    collect = commands.add_parser(
+        "collect-npc-posts", help="Archive all public recent-feed pages; never publishes"
+    )
+    collect.add_argument(
+        "--allow-network", action="store_true", help="Opt in for this read-only run"
+    )
+    collect.add_argument("--namespace", default="ctn-2026")
+    collect.add_argument("--max-pages", type=int, default=1000)
+    collect.add_argument("--timeout-seconds", type=float, default=900)
     args = parser.parse_args()
     if args.command == "run" and args.ticks is not None and args.ticks < 1:
         parser.error("--ticks must be positive")
@@ -57,7 +67,26 @@ def main() -> None:
     configure_logging()
     try:
         settings = Settings()
-        if args.command == "db":
+        if args.command == "collect-npc-posts":
+            if args.max_pages < 1 or not 0 < args.timeout_seconds <= 86400:
+                parser.error(
+                    "Collection requires positive page limit and timeout up to 86400 seconds"
+                )
+            settings = settings.model_copy(
+                update={
+                    "ctn_network_enabled": settings.ctn_network_enabled or args.allow_network,
+                }
+            )
+            print(
+                json.dumps(
+                    asyncio.run(
+                        collect_posts(
+                            settings, args.namespace, args.max_pages, args.timeout_seconds
+                        )
+                    )
+                )
+            )
+        elif args.command == "db":
             upgrade(settings)
         elif args.command == "run":
             asyncio.run(run_worker(settings, args.ticks))

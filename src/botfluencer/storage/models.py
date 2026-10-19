@@ -3,12 +3,14 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
+    BigInteger,
     CheckConstraint,
     DateTime,
     Float,
     ForeignKey,
     Index,
     String,
+    Text,
     UniqueConstraint,
     func,
 )
@@ -123,5 +125,29 @@ class RequestBudget(Base):
     bucket: Mapped[str] = mapped_column(String(32), primary_key=True)
     interval_seconds: Mapped[float] = mapped_column(Float)
     next_allowed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class NPCPost(Base):
+    """Public-post archive; the table name does not prove author NPC identity."""
+
+    __tablename__ = "npc_posts"
+    __table_args__ = (
+        CheckConstraint(
+            "npc_status IN ('unverified','npc','player')", name="npc_post_classification"
+        ),
+        Index("ix_npc_posts_author_time", "namespace", "author_id", "time_stamp"),
+    )
+    namespace: Mapped[str] = mapped_column(String(64), primary_key=True)
+    post_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    author_id: Mapped[int] = mapped_column(BigInteger)
+    user_name: Mapped[str | None] = mapped_column(Text)
+    name: Mapped[str | None] = mapped_column(Text)
+    post: Mapped[str | None] = mapped_column(Text)
+    time_stamp: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    kind: Mapped[str] = mapped_column(String(32))
+    npc_status: Mapped[str] = mapped_column(String(16))
+    collected_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

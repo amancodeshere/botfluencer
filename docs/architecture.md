@@ -60,3 +60,11 @@ After ownership transfers, the new worker recovers the ledger and begins ticking
 `/health/worker` requires an active, fresh heartbeat and database connectivity;
 use it for ongoing monitoring. Pause leaves heartbeat running and stops new work;
 an already reserved/in-flight call may finish.
+
+## Public post archive
+
+`npc_posts` is an independent read-only archive, with the requested author names,
+body, and original UTC creation time. Namespace plus source post ID deduplicates
+reruns. It does not create decisions or actions. API profiles have no NPC marker,
+so all collected authors remain unverified. See post-collection.md for capture
+commands, source coverage, restart behavior, and limits.

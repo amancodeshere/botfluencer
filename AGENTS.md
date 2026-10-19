@@ -3,7 +3,7 @@
 ## Purpose and current scope
 
 Botfluencer is this team's Capture the Narrative 2026 competition workspace.
-The team is enrolled and portal readiness is verified. Official SDK 0.4.0,
+The team is enrolled and portal readiness is verified. Official SDK 0.5.0,
 2026 contracts, quotas, and scoring references are recorded in docs/competition.md.
 Hosting choice: Railway. Durable storage: Postgres for observations, decisions,
 actions, outcomes, and runtime controls. Current work package: scaffolding and

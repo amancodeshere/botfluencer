@@ -1,10 +1,11 @@
 # Verified CTN 2026 baseline
 
-Checked 17 October 2026 against the official
+Initially checked 17 October 2026 against the official
 [getting-started guide](https://capturethenarrative.com/info/competitions/2026/getting-started/),
 [rules](https://capturethenarrative.com/info/competitions/2026/rules/),
 [scoring guide](https://capturethenarrative.com/info/competitions/2026/scoring/),
-and installed [SDK 0.4.0](https://pypi.org/project/capturethenarrative/0.4.0/).
+and [SDK 0.5.0](https://pypi.org/project/capturethenarrative/0.5.0/), updated
+19 October 2026 for live read collection.
 Recheck organiser changes before enabling access.
 
 Opening: 19 October 2026, 17:00 Australia/Sydney. Every competition request checks
@@ -23,7 +24,7 @@ not assumptions inherited from an earlier event. No competition accounts created
 | Posts | At most 500 characters |
 
 Documented team limits per minute: 3 combined posts/replies/reposts; 10 feed reads;
-30 each likes, follows, and views; 3 each post/account reports; 300 other reads.
+30 each likes, follows, and views; 3 each post/account reports; 300 per other-read route (the collector shares one conservative read bucket).
 Authentication is 5/minute per network address. Model limit: 3/minute, burst 2,
 concurrency 1. The baseline deliberately spaces model calls instead of using burst.
 Server rate headers and Retry-After update durable pacing. These budgets cover

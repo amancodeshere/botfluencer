@@ -2,7 +2,7 @@
 
 Capture the Narrative 2026 team workspace. Python 3.13, uv, and Railway-hosted
 Postgres provide a durable baseline for future bot strategies. The official SDK
-is pinned to 0.4.0; async adapters follow its documented wire contracts.
+is pinned to 0.5.0; async adapters follow its documented wire contracts.
 
 The default is `mock` + `replay` + `noop`: fixture observations are persisted,
 without generated drafts or actions. Real publishing remains unavailable.
@@ -56,6 +56,7 @@ serializes integration runs. Read [operations](docs/operations.md) for details.
 
 ## Team references
 
+- [Post collection](docs/post-collection.md): archive live public posts without publishing.
 - [Team access](docs/team-access.md): GitHub secrets, shared settings, and teammate onboarding.
 - [Architecture](docs/architecture.md): ledger, recovery, ownership, and boundaries.
 - [Competition standards](docs/competition.md): verified 2026 contracts and limits.

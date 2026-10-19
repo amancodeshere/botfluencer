@@ -73,7 +73,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "alembic", specifier = ">=1.16,<2" },
-    { name = "capturethenarrative", specifier = "==0.4.0" },
+    { name = "capturethenarrative", specifier = "==0.5.0" },
     { name = "fastapi", specifier = ">=0.115,<1" },
     { name = "httpx", specifier = ">=0.28.1,<1" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2,<4" },
@@ -92,14 +92,14 @@ dev = [
 
 [[package]]
 name = "capturethenarrative"
-version = "0.4.0"
+version = "0.5.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "openai" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/80/6a/7071a0eceb7d541c2cc8c39ceb8753e69451e60c289ce01bc6c786e11d20/capturethenarrative-0.4.0.tar.gz", hash = "sha256:45269612ad08f543dab4f8330e9ed42ebfa1a48d01cfe613baf7841df187612c", size = 19636, upload-time = "2026-10-14T08:55:05.327Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/f1/89/83100cb4f32036d3802b609fe2ae77ebf224d3645940e194f8ca7eec4e0c/capturethenarrative-0.5.0.tar.gz", hash = "sha256:192844cfc8009506a8b105b12bf4d6eed75e1dcd62f5b2fb4318ea5b8e980e36", size = 25066, upload-time = "2026-10-18T12:22:09.256Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/27/60/54fa1e5d872115e37a0f93c6e1344699e54df278a372b8c6a359147bb667/capturethenarrative-0.4.0-py3-none-any.whl", hash = "sha256:d116c0775cd5780732486d0bf640d67c206d1b74172942b96f9425f5e076a5a4", size = 17357, upload-time = "2026-10-14T08:55:04.072Z" },
+    { url = "https://files.pythonhosted.org/packages/dd/b7/33406c3c66cbf3ad54cc99bd336ddea463e1d6c62a5c2861de6ad90b9b76/capturethenarrative-0.5.0-py3-none-any.whl", hash = "sha256:561900100e1de98db513636fe07eaf240341abefb24e9453cd46785f1b7ee0a8", size = 20999, upload-time = "2026-10-18T12:22:07.713Z" },
 ]
 
 [[package]]

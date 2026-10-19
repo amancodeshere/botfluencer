@@ -1,9 +1,9 @@
-"""Verified from official CTN 2026 guide and capturethenarrative 0.4.0 source."""
+"""Verified from official CTN 2026 guide and capturethenarrative 0.5.0 source."""
 
 from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
-SDK_VERSION = "0.4.0"
+SDK_VERSION = "0.5.0"
 SOCIAL_URL = "https://social.legitreal.com/api"
 NEWS_URL = "https://sites.legitreal.com"
 LLM_URL = "https://llm.legitreal.com/v1"

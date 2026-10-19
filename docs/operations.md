@@ -79,3 +79,10 @@ the application to a schema-compatible commit; never automatically downgrade the
 schema. Configure Railway backups and restore into a separate empty database
 before relying on the system for competition work. Backup scheduling and a restore
 drill are pending; no completed restore is claimed. Never commit exports or dumps.
+
+## Live public-post snapshots
+
+Use `uv run botfluencer collect-npc-posts --allow-network` for a one-shot archive
+into npc_posts after migrations. See [post collection](post-collection.md) for
+coverage, UTC timestamps, deduplication, and the unverified NPC classification.
+This does not run the worker or enable publishing.
