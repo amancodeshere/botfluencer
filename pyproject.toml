@@ -18,6 +18,33 @@ dependencies = [
 [project.scripts]
 botfluencer = "botfluencer.cli:main"
 
+[project.optional-dependencies]
+training = [
+    "torch==2.14.1",
+    "transformers==5.20.2",
+    "datasets==5.1.0",
+    "accelerate==1.15.0",
+    "peft==0.21.2",
+    "scikit-learn>=1.7,<2",
+    "sentencepiece>=0.2,<1",
+    "safetensors>=0.6,<1",
+    "pandas>=2.3,<4",
+    "matplotlib>=3.10,<4",
+    "jupyterlab>=4.4,<5",
+    "ipykernel>=6.30,<8",
+    "tensorboard>=2.20,<3",
+]
+
+[tool.uv.sources]
+torch = [
+    { index = "pytorch-cu130", extra = "training", marker = "sys_platform == 'linux' and platform_machine == 'x86_64'" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-cu130"
+url = "https://download.pytorch.org/whl/cu130"
+explicit = true
+
 [build-system]
 requires = ["hatchling>=1.27,<2"]
 build-backend = "hatchling.build"
