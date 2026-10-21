@@ -227,3 +227,14 @@ data/
 backups/
 *.dump
 node_modules/
+
+# Private ML datasets, model weights, and experiment outputs
+artifacts/
+checkpoints/
+models/
+runs/
+*.safetensors
+*.pt
+*.pth
+*.ckpt
+*.onnx

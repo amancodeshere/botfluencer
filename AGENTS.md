@@ -50,6 +50,11 @@ Keep all competition activity within the organiser-provided simulation.
   process with a failure status; a healthy web server alone is insufficient.
 - Record strategy/prompt versions, correlation IDs, and UTC timestamps.
   Keep runtime data separated by namespace, especially replay versus future live.
+- On the GPU workstation, read docs/gaming-pc.md. Use the named `botfluencer`
+  Mamba environment and `uv run --locked --inexact --extra training`, or the
+  installed `botfluencer-workstation` launcher. Keep CUDA dependencies optional
+  for Railway. Keep credentials and training artifacts outside the OneDrive
+  Desktop checkout; use explicit private environment-file paths.
 
 ## Secrets and data
 

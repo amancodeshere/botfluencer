@@ -1,6 +1,6 @@
 # Project status
 
-## Current baseline — 19 October 2026
+## Current baseline — 22 October 2026
 
 Team readiness, side, and allowances were verified in the authenticated portal.
 The team code is configured in ignored private local settings and an approved
@@ -33,6 +33,13 @@ publishing were performed.
 - Read-only cursor-paginated post archive with author names, original UTC times,
   preserved empty reposts, deduplicated reruns, and the team-confirmed
   pre-18:00 Sydney NPC cutoff.
+- Windows/WSL2 GPU workstation reached over Tailscale SSH, with a Desktop clone,
+  named `botfluencer` Mamba environment, Python 3.13, CUDA PyTorch, and optional
+  training/notebook dependencies in the shared lockfile. Environment, model
+  caches, datasets, and checkpoints use D: outside the OneDrive Desktop.
+  Approved application/test credentials are private Ubuntu files (0600), with
+  mock/noop defaults and competition network access disabled. See
+  [GPU workstation](gaming-pc.md) for commands and locations.
 
 ## Verification
 
@@ -46,6 +53,19 @@ UTC normalization, and the strict NPC cutoff boundary. Integration groups use
 independent synthetic namespaces.
 The final payload compatibility/noop test also passed after the last storage change.
 All three health endpoints returned 200; SIGTERM drained and exited with code 0.
+
+On 22 October, all 52 tests passed on gaming-pc against the dedicated Railway
+test database, including migration drift and recovery tests. Ruff lint/format
+and strict mypy also passed locally. The workstation doctor confirms SDK 0.5.0,
+configured private credentials, mock/replay/noop, competition networking disabled,
+and publishing disabled. The installed training environment passed dependency
+compatibility checks.
+
+Tiny BERT completed three CUDA/BF16 optimizer steps and a matching checkpoint
+reload on the RTX 3070. The first pretrained DeBERTa attempts failed after the
+optimizer update. The diagnostic now explicitly requests FP32 model weights;
+its final verification was interrupted by loss of the PC's SSH route. Do not
+treat pretrained fine-tuning as verified until that check finishes successfully.
 
 Tests cover migration drift, deduplication, pause and budget durability, ambiguous
 acceptance, retry scheduling, cooldowns, singleton ownership and ownership loss,
@@ -63,13 +83,20 @@ onboarding. Personal Railway tokens and database admin credentials were not shar
 
 ## Remaining limits / next stage
 
-No worker service deployed, code pushed, or live executor enabled. The required
+No worker service is deployed and no live executor is enabled. Workstation setup
+commits are shared directly with the PC; this task does not push to GitHub. The required
 TEST_DATABASE_URL repository secret is configured; a hosted GitHub Actions run
 remains unverified until the local workflow commits are pushed. Hosted handover,
 monitoring/alerts, a 24-hour soak, backup scheduling,
 and a restore drill remain pending. Selective policies still need persisted skip
 decisions; returning None currently defers the same observation. No winning
 strategy is claimed.
+
+The workstation installation does not schedule inference, train a useful
+classifier, or enable reporting. The Windows startup installer is prepared and
+syntax-checked, but requires Administrator PowerShell on the PC and a planned
+reboot test before unattended SSH recovery is proven. Windows sleep and
+Tailscale key expiry also need operational attention.
 
 ## Initial live snapshot
 
