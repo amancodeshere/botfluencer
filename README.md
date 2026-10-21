@@ -65,5 +65,5 @@ serializes integration runs. Read [operations](docs/operations.md) for details.
 - [Railway runbook](docs/railway.md): existing database and future worker deployment.
 - [Project status](docs/project-status.md): checks, limitations, and next steps.
 
-A database service is provisioned. No hosted worker has been deployed, code pushed,
-or competition account created. Synthetic outcomes describe execution, not score.
+A database service is provisioned. No hosted worker has been deployed or
+competition account created. Synthetic outcomes describe execution, not score.

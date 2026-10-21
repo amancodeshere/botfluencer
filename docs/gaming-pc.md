@@ -55,6 +55,12 @@ It does not train a useful detector or estimate competition performance. Default
 mode uses a random tiny BERT and requires no model download. Both require CUDA
 and fail rather than silently falling back to CPU.
 
+Verified on this workstation: tiny BERT with BF16 computation, and pretrained
+DeBERTa-v3-small with FP32 parameters/computation. Both completed three optimizer
+steps and matching checkpoint reloads. The pretrained check peaked at 2,731 MiB
+of allocated GPU memory for two short synthetic examples; this is not a sizing
+estimate for full training jobs.
+
 ## Reproduce
 
 Install Miniforge from the official conda-forge release and verify its published
@@ -120,6 +126,10 @@ this installer cannot be applied from the normal remote session. Syntax checks
 do not prove reboot recovery: inspect the task and its startup log and perform a
 planned reboot before depending on unattended access. Tailscale key expiry and
 Windows sleep still affect availability.
+
+The installer has now been applied on gaming-pc. The scheduled task was observed
+running, its log recorded `forwarding_ready`, and SSH reconnected successfully.
+A complete Windows reboot recovery test remains pending.
 
 Sources: [Mamba installation](https://mamba.readthedocs.io/en/latest/installation/mamba-installation.html),
 [uv syncing](https://docs.astral.sh/uv/concepts/projects/sync/),

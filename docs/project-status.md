@@ -62,10 +62,12 @@ and publishing disabled. The installed training environment passed dependency
 compatibility checks.
 
 Tiny BERT completed three CUDA/BF16 optimizer steps and a matching checkpoint
-reload on the RTX 3070. The first pretrained DeBERTa attempts failed after the
-optimizer update. The diagnostic now explicitly requests FP32 model weights;
-its final verification was interrupted by loss of the PC's SSH route. Do not
-treat pretrained fine-tuning as verified until that check finishes successfully.
+reload on the RTX 3070. Pretrained DeBERTa-v3-small also completed three FP32
+optimizer steps with finite losses and a matching checkpoint reload, using a
+peak 2,731 MiB of allocated GPU memory. The diagnostic explicitly requests FP32
+model weights to prevent the non-finite optimizer results seen with the inferred
+checkpoint dtype. These synthetic installation checks do not establish detector
+quality or memory requirements for longer sequences and larger batches.
 
 Tests cover migration drift, deduplication, pause and budget durability, ambiguous
 acceptance, retry scheduling, cooldowns, singleton ownership and ownership loss,
@@ -86,16 +88,17 @@ onboarding. Personal Railway tokens and database admin credentials were not shar
 No worker service is deployed and no live executor is enabled. Workstation setup
 commits are shared directly with the PC; this task does not push to GitHub. The required
 TEST_DATABASE_URL repository secret is configured; a hosted GitHub Actions run
-remains unverified until the local workflow commits are pushed. Hosted handover,
+remains unverified by this task. Hosted handover,
 monitoring/alerts, a 24-hour soak, backup scheduling,
 and a restore drill remain pending. Selective policies still need persisted skip
 decisions; returning None currently defers the same observation. No winning
 strategy is claimed.
 
 The workstation installation does not schedule inference, train a useful
-classifier, or enable reporting. The Windows startup installer is prepared and
-syntax-checked, but requires Administrator PowerShell on the PC and a planned
-reboot test before unattended SSH recovery is proven. Windows sleep and
+classifier, or enable reporting. The Windows startup installer was applied
+through Administrator PowerShell on the PC. Its task is running,
+forwarding readiness is logged, and SSH connectivity has been restored. A planned
+Windows reboot test is still required before unattended recovery is proven. Windows sleep and
 Tailscale key expiry also need operational attention.
 
 ## Initial live snapshot
