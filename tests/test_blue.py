@@ -11,7 +11,7 @@ import pytest
 from sqlalchemy import select
 
 from botfluencer.blue.config import BlueSettings
-from botfluencer.blue.data import group_split, prepare_rows, private_directory
+from botfluencer.blue.data import group_split, prepare_rows, private_directory, reviewed_rows
 from botfluencer.blue.model import Manifest
 from botfluencer.blue.report import Reporter
 from botfluencer.blue.store import BlueStore
@@ -46,6 +46,12 @@ def test_data_dedup_grouping_and_no_false_origin_labels() -> None:
         metrics([0], [float("nan")], 0.9)
     with pytest.raises(ValueError):
         private_directory(Path.cwd() / "data" / "unsafe")
+    reviewed = reviewed_rows([dict(author_id=7, source="team_review", label=1, text="Reviewed")])
+    assert reviewed[0]["group"] == "author:7"
+    with pytest.raises(ValueError, match="actual author"):
+        reviewed_rows(
+            [dict(author_id=7, group="fake-author", source="moderator", label=1, text="Reviewed")]
+        )
 
 
 def test_manifest_rejects_tampering(tmp_path: Path) -> None:
@@ -249,3 +255,44 @@ async def test_feed_cursor_restart_and_boundary(repo: Repository) -> None:
     # New poll encounters the committed anchor and stops without another traversal.
     assert await collect_incremental(transport, restarted) == 0
     assert (await store.state())["cursor"] is None
+
+
+async def test_training_pause_keeps_collecting_without_loading_model(monkeypatch) -> None:
+    from contextlib import asynccontextmanager
+
+    import botfluencer.blue.worker as worker
+
+    @asynccontextmanager
+    async def leadership(_scope):
+        yield SimpleNamespace(execute=AsyncMock(), commit=AsyncMock())
+
+    database = SimpleNamespace(leadership=leadership, close=AsyncMock())
+    store = SimpleNamespace(
+        initialize=AsyncMock(),
+        state=AsyncMock(return_value={"paused": True}),
+        heartbeat=AsyncMock(),
+        summary=AsyncMock(return_value={}),
+    )
+    collector = AsyncMock(return_value=0)
+    monkeypatch.setattr(worker, "Database", lambda _settings: database)
+    monkeypatch.setattr(worker, "TeamPacer", lambda _database: SimpleNamespace(scope="test"))
+    monkeypatch.setattr(
+        worker,
+        "CompetitionTransport",
+        lambda *_args: SimpleNamespace(pacer=SimpleNamespace(scope="test"), close=AsyncMock()),
+    )
+    monkeypatch.setattr(worker, "BlueStore", lambda *_args: store)
+    monkeypatch.setattr(worker, "collect_incremental", collector)
+
+    def forbidden(*_args):
+        raise AssertionError("A paused worker must not load a GPU model")
+
+    monkeypatch.setattr(worker, "Detector", forbidden)
+    settings = Settings(
+        _env_file=None,
+        DATABASE_URL="postgresql://test:test@example.invalid/test",
+        CTN_NETWORK_ENABLED=True,
+    )
+    await worker.watch(settings, BlueSettings(), once=True)
+    collector.assert_awaited_once()
+    store.heartbeat.assert_awaited_once_with("paused")

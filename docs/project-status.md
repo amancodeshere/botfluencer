@@ -1,6 +1,6 @@
 # Project status
 
-## Current baseline — 22 October 2026
+## Current baseline — 23 October 2026
 
 Team readiness, side, and allowances were verified in the authenticated portal.
 The team code is configured in ignored private local settings and an approved
@@ -100,6 +100,42 @@ through Administrator PowerShell on the PC. Its task is running,
 forwarding readiness is logged, and SSH connectivity has been restored. A planned
 Windows reboot test is still required before unattended recovery is proven. Windows sleep and
 Tailscale key expiry also need operational attention.
+
+## Blue-team delivery — 23 October 2026
+
+Three clean notebook templates and private gaming-pc copies cover NPC export,
+balanced Yes/No Qwen synthesis, DeBERTa training, a TF-IDF baseline, calibration,
+review and shadow activation. Private exports contain 3,111 deduplicated NPC text
+examples from 1,427 authors; raw archive counts below include duplicates/reposts.
+No competition model calls or useful detector training were run by this delivery;
+the user runs those notebook stages. Generated data, checkpoints, and executed
+notebooks remain outside Git/OneDrive.
+
+An additive migration to 0004 was verified against isolated test Postgres and
+applied to the application database. The resident `botfluencer-blue` user service
+is installed/enabled on gaming-pc, with user lingering enabled. Its read-only
+feed collector is running on a 30-second target interval, with persisted catch-up
+cursor and singleton ownership. Heartbeat/status confirmed `waiting_for_model`.
+Reporting and automatic approval remain disabled; there is no active release or
+account session credential. A stale PC application credential was refreshed from
+the working private local configuration over the approved SSH path.
+
+37 unit checks and two new Postgres integration tests passed, including migration
+metadata drift, pagination recovery, author exclusions, score/report deduplication,
+pause, uncertain execution recovery, pending budget and durable moderator blocks.
+The existing integration groups were not rerun for this delivery. Ruff lint/format
+and strict mypy pass. A tiny synthetic CUDA training run exercised the notebook
+helper through training, evaluation, model export, manifest verification, local
+inference and shadow symlink activation in an isolated diagnostic directory.
+That diagnostic release is not the live worker's active model.
+
+Next: run the private notebooks, inspect held-out metrics, activate a trained
+shadow release, and review real candidates. Automatic reporting additionally
+requires real author-disjoint validation and explicit private account settings.
+Moderator outcomes currently need manual entry: the authenticated outcome payload
+contract has not been verified. Default one-pending reporting budget therefore
+limits unattended reporting throughput. Full reboot recovery and external
+monitoring/alerts remain unverified. See [blue-team workflow](blue-team.md).
 
 ## Initial live snapshot
 

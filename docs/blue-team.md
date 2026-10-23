@@ -41,6 +41,10 @@ split is reported separately. A threshold of 1.0 means no useful operating point
 was found. Inspect confidence intervals, not just point precision/accuracy.
 Synthetic test success cannot validate automatic reporting. Template generation,
 model training and activation are off until their notebook switches are enabled.
+Later, add independently reviewed real examples to private
+`reviewed-training.jsonl` for retraining. They need `author_id`, binary `label`,
+`text`, and `source=team_review|moderator`; the helper derives the author group
+and rejects conflicting group IDs. Keep a separate real holdout for final evaluation.
 
 To use Jupyter over SSH, in Ubuntu:
 
@@ -91,7 +95,10 @@ systemctl --user status botfluencer-blue
 journalctl --user -u botfluencer-blue -n 20
 ```
 
-The pause is durable. Resuming changes only pause state, not reporting opt-in.
+Pause disables inference/reporting and releases the GPU; read-only collection
+continues during training. Use `systemctl --user stop botfluencer-blue` to stop
+feed reads as well. The pause is durable. Resuming changes only pause state,
+not reporting opt-in.
 Process failures exit nonzero; systemd restarts with backoff and a restart limit.
 Check `heartbeat_age_seconds` as well as systemd state: a stale worker is not
 healthy simply because its process exists. Monitoring/notification delivery is

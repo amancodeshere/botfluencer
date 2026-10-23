@@ -73,6 +73,24 @@ def group_split(group: str) -> str:
     return "train" if bucket < 8 else "validation" if bucket == 8 else "test"
 
 
+def reviewed_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    normalized = []
+    for row in rows:
+        author = row.get("author_id")
+        if (
+            row.get("source") not in {"team_review", "moderator"}
+            or not isinstance(author, int)
+            or isinstance(author, bool)
+            or author < 1
+        ):
+            raise ValueError("Real labels require a reviewed source and actual integer author ID")
+        group = f"author:{author}"
+        if row.get("group", group) != group:
+            raise ValueError("Real examples must group by actual author ID")
+        normalized.append(dict(row, group=group))
+    return prepare_rows(normalized)
+
+
 def prepare_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     by_text: dict[str, dict[str, Any]] = {}
     conflicts: set[str] = set()

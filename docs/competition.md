@@ -42,7 +42,7 @@ Execution receipts are separate from influence scoring. The scoring guide descri
 Red/Blue/Polling views; NPC engagement and the daily view cap matter, but this
 scaffold does not estimate persuasion or score. NPC prompt injection is prohibited
 and can silently yield zero score. Keep activity inside the organiser's simulation.
-No competition strategy, medical advice generator, or moderation evasion is built.
+No publishing strategy, medical advice generator, or moderation evasion is built.
 
 ## Blue reporting recheck — 23 October 2026
 

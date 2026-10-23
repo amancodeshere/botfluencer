@@ -8,7 +8,14 @@ import random
 from pathlib import Path
 from typing import Any
 
-from botfluencer.blue.data import prepare_rows, private_directory, read_jsonl, text_key, write_json
+from botfluencer.blue.data import (
+    prepare_rows,
+    private_directory,
+    read_jsonl,
+    reviewed_rows,
+    text_key,
+    write_json,
+)
 from botfluencer.blue.model import Detector, Manifest
 
 
@@ -59,7 +66,11 @@ def train(root: Path, output: Path, *, epochs: int = 3, max_length: int = 256) -
     root, output = private_directory(root), private_directory(output)
     if (output / "manifest.json").exists():
         raise ValueError("Use a new immutable output directory for every release")
-    rows = prepare_rows(read_jsonl(root / "npc.jsonl") + read_jsonl(root / "synthetic.jsonl"))
+    rows = prepare_rows(
+        read_jsonl(root / "npc.jsonl")
+        + read_jsonl(root / "synthetic.jsonl")
+        + reviewed_rows(read_jsonl(root / "reviewed-training.jsonl"))
+    )
     splits = {
         name: [r for r in rows if r["split"] == name] for name in ("train", "validation", "test")
     }
@@ -215,8 +226,8 @@ def train(root: Path, output: Path, *, epochs: int = 3, max_length: int = 256) -
 def validate_real(release: Path, labelled_jsonl: Path) -> dict[str, Any]:
     """Separate, externally reviewed labels; never treat synthetic evaluation as real."""
     detector = Detector(release)
-    rows = prepare_rows(read_jsonl(labelled_jsonl))
-    if not rows or any(r.get("source") not in {"team_review", "moderator"} for r in rows):
+    rows = reviewed_rows(read_jsonl(labelled_jsonl))
+    if not rows:
         raise ValueError("Only independently reviewed real NPC/player examples are eligible")
     provenance = json.loads((release / "training-provenance.json").read_text())
     used_groups, used_hashes = set(provenance["used_groups"]), set(provenance["used_text_hashes"])

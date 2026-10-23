@@ -87,7 +87,11 @@ async def watch(settings: Settings, config: BlueSettings, *, once: bool = False)
             while True:
                 started = time.monotonic()
                 await owner.execute(text("SELECT 1"))
+                await owner.commit()
                 state = await store.state()
+                # Free CUDA for training when paused, but retain read-only feed coverage.
+                async with asyncio.timeout(180):
+                    await collect_incremental(transport, store)
                 if state["paused"]:
                     if detector is not None:
                         torch = detector.torch
@@ -96,8 +100,6 @@ async def watch(settings: Settings, config: BlueSettings, *, once: bool = False)
                         torch.cuda.empty_cache()
                     await store.heartbeat("paused")
                 else:
-                    async with asyncio.timeout(180):
-                        await collect_incremental(transport, store)
                     manifest_path = config.artifact / "manifest.json"
                     if manifest_path.exists():
                         version = json.loads(manifest_path.read_text())["version"]
@@ -107,6 +109,7 @@ async def watch(settings: Settings, config: BlueSettings, *, once: bool = False)
                         posts = await store.pending_posts(detector.manifest.version)
                         probabilities = detector.predict([p["text"] for p in posts])
                         await owner.execute(text("SELECT 1"))
+                        await owner.commit()
                         await store.save_scores(
                             posts,
                             probabilities,
