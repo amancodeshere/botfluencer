@@ -43,3 +43,20 @@ Red/Blue/Polling views; NPC engagement and the daily view cap matter, but this
 scaffold does not estimate persuasion or score. NPC prompt injection is prohibited
 and can silently yield zero score. Keep activity inside the organiser's simulation.
 No competition strategy, medical advice generator, or moderation evasion is built.
+
+## Blue reporting recheck — 23 October 2026
+
+The current scoring page's updated header and reporting section schedule the
+first moderation ruling from three hours after the first report (subsequent
+distinct teams halve the period). Older examples elsewhere on the page still
+mention six hours. A genuine ruling suspends team post/account reporting for six
+hours; the moderator is imperfect, and verified accounts are an exception to
+that uncertainty. Account-report awards require a moderator-hidden post and at
+least 100 account actions. These are reasons to prefer precision over volume.
+
+SDK 0.5.0's authenticated account method uses `POST /posts/{post_id}/report`,
+with `reason=inauthentic` and nonempty explanatory `detail`. Authentication is an
+account session bearer token, not the model's team code. The blue-team module
+implements only this narrow write and defaults to shadow operation; social
+publishing remains blocked. It does not infer a ruling from a hidden post or
+HTTP 404. Recheck rules again before enabling real reports.

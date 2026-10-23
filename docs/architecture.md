@@ -68,3 +68,20 @@ body, and original UTC creation time. Namespace plus source post ID deduplicates
 reruns. It does not create decisions or actions. NPC labels support an explicit team-confirmed
 timestamp cutoff; the initial capture uses 18:00 Sydney on 19 October 2026. See post-collection.md for capture
 commands, source coverage, restart behavior, and limits.
+
+## Blue-team detection and moderation
+
+`blue/` owns private dataset preparation, optional workstation training/inference,
+incremental public-feed collection, and a narrow moderation report adapter.
+ML libraries load lazily and remain outside Railway's default dependencies.
+`blue_state` checkpoints catch-up and pause/heartbeat state; `blue_scores` retains
+model-versioned evidence. `blue_reports` deduplicates team/post intents across
+namespaces and models, separate from the mock publishing action ledger.
+`blue_team_controls` persists reporting blocks. Reports recover interrupted
+attempts to unknown rather than reissuing them. A separate team lock spans claim
+and submission. Ordinary publishing remains unavailable.
+
+The resident workstation service defaults to collection/shadow scoring. Reports
+require private account authentication and opt-in; automatic approval additionally
+requires independent real-label evaluation. Moderator outcome ingestion is
+manual until its authenticated payload contract can be verified. See blue-team.md.

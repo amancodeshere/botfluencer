@@ -1,0 +1,22 @@
+[Unit]
+Description=Botfluencer resident blue-team shadow collector and scorer
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=3
+
+[Service]
+Type=simple
+WorkingDirectory=%h
+ExecStart=%h/.local/bin/botfluencer-workstation --env-file %h/.config/botfluencer/runtime.env --env-file %h/.config/botfluencer/blue.env botfluencer blue watch --allow-network
+Restart=on-failure
+RestartSec=30
+TimeoutStopSec=45
+KillSignal=SIGINT
+UMask=0077
+NoNewPrivileges=true
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target

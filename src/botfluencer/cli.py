@@ -9,6 +9,9 @@ from importlib.metadata import version
 
 from pydantic import ValidationError
 
+from botfluencer.blue.config import BlueSettings
+from botfluencer.blue.worker import operator as blue_operator
+from botfluencer.blue.worker import watch as blue_watch
 from botfluencer.config import Settings
 from botfluencer.platform.collect import collect_posts
 from botfluencer.reporting.doctor import doctor
@@ -65,6 +68,18 @@ def main() -> None:
     )
     collect.add_argument("--max-pages", type=int, default=1000)
     collect.add_argument("--timeout-seconds", type=float, default=900)
+    blue = commands.add_parser("blue", help="Blue-team shadow collector, scorer, and report ledger")
+    blue_commands = blue.add_subparsers(dest="blue_operation", required=True)
+    watch = blue_commands.add_parser("watch")
+    watch.add_argument("--allow-network", action="store_true")
+    watch.add_argument("--once", action="store_true")
+    for operation in ("status", "pause", "resume"):
+        blue_commands.add_parser(operation)
+    approve = blue_commands.add_parser("approve")
+    approve.add_argument("--post-id", type=int, required=True)
+    outcome = blue_commands.add_parser("outcome")
+    outcome.add_argument("--post-id", type=int, required=True)
+    outcome.add_argument("--ruling", choices=["genuine", "inauthentic"], required=True)
     args = parser.parse_args()
     if args.command == "run" and args.ticks is not None and args.ticks < 1:
         parser.error("--ticks must be positive")
@@ -73,7 +88,30 @@ def main() -> None:
     configure_logging()
     try:
         settings = Settings()
-        if args.command == "collect-npc-posts":
+        if args.command == "blue":
+            blue_config = BlueSettings()
+            if args.blue_operation == "watch":
+                settings = settings.model_copy(
+                    update={
+                        "ctn_network_enabled": settings.ctn_network_enabled or args.allow_network,
+                    }
+                )
+                asyncio.run(blue_watch(settings, blue_config, once=args.once))
+            else:
+                print(
+                    json.dumps(
+                        asyncio.run(
+                            blue_operator(
+                                settings,
+                                blue_config,
+                                args.blue_operation,
+                                getattr(args, "post_id", None),
+                                getattr(args, "ruling", None),
+                            )
+                        )
+                    )
+                )
+        elif args.command == "collect-npc-posts":
             if args.max_pages < 1 or not 0 < args.timeout_seconds <= 86400:
                 parser.error(
                     "Collection requires positive page limit and timeout up to 86400 seconds"

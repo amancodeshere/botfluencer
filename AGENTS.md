@@ -16,6 +16,11 @@ strategies. Implement or enable real competition actions only after an explicit
 request and review of the executor contract. Synthetic outcomes are diagnostic
 data, not influence scores.
 Keep all competition activity within the organiser-provided simulation.
+Read docs/blue-team.md before blue-team changes. Training notebooks are templates:
+execute private copies outside the repo/OneDrive. NPC origin is not a human-text
+label. Synthetic evaluation cannot authorize automatic reports. The dedicated
+blue report ledger is separate from publishing; retain shadow defaults, own/NPC
+exclusions, team deduplication, moderation blocks, and ambiguity recovery.
 
 ## Starting a task
 

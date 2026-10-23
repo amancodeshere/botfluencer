@@ -56,6 +56,8 @@ serializes integration runs. Read [operations](docs/operations.md) for details.
 
 ## Team references
 
+- [Blue-team workflow](docs/blue-team.md): private training notebooks, scheduled feed/scoring,
+  author evidence, and opt-in moderation reports.
 - [GPU workstation](docs/gaming-pc.md): gaming-pc SSH, Mamba, CUDA, and local training checks.
 - [Post collection](docs/post-collection.md): archive live public posts without publishing.
 - [Team access](docs/team-access.md): GitHub secrets, shared settings, and teammate onboarding.

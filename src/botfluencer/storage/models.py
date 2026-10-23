@@ -151,3 +151,61 @@ class NPCPost(Base):
     collected_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+
+
+class BlueState(Base):
+    __tablename__ = "blue_state"
+    namespace: Mapped[str] = mapped_column(String(64), primary_key=True)
+    paused: Mapped[bool] = mapped_column(default=False, server_default="false")
+    cursor: Mapped[str | None] = mapped_column(Text)
+    anchor: Mapped[int | None] = mapped_column(BigInteger)
+    next_anchor: Mapped[int | None] = mapped_column(BigInteger)
+    heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    model_version: Mapped[str | None] = mapped_column(String(64))
+    last_event: Mapped[str | None] = mapped_column(String(64))
+
+
+class BlueScore(Base):
+    __tablename__ = "blue_scores"
+    __table_args__ = (
+        CheckConstraint("probability >= 0 AND probability <= 1", name="blue_probability"),
+        Index("ix_blue_scores_author", "namespace", "author_id", "model_version"),
+    )
+    namespace: Mapped[str] = mapped_column(String(64), primary_key=True)
+    post_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    model_version: Mapped[str] = mapped_column(String(64), primary_key=True)
+    author_id: Mapped[int] = mapped_column(BigInteger)
+    probability: Mapped[float] = mapped_column(Float)
+    evidence: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class BlueReport(Base):
+    """One report intent per team/post, independent of model and worker namespace."""
+
+    __tablename__ = "blue_reports"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('review','approved','in_flight','accepted','unknown','rejected')",
+            name="blue_report_status",
+        ),
+        Index("ix_blue_report_dispatch", "scope", "status", "created_at"),
+    )
+    scope: Mapped[str] = mapped_column(String(64), primary_key=True)
+    post_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    namespace: Mapped[str] = mapped_column(String(64))
+    author_id: Mapped[int] = mapped_column(BigInteger)
+    model_version: Mapped[str] = mapped_column(String(64))
+    probability: Mapped[float] = mapped_column(Float)
+    detail: Mapped[str] = mapped_column(String(1000))
+    status: Mapped[str] = mapped_column(String(16), server_default="review")
+    correlation_id: Mapped[UUID] = mapped_column(default=uuid4)
+    outcome: Mapped[str | None] = mapped_column(String(32))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    attempted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class BlueTeamControl(Base):
+    __tablename__ = "blue_team_controls"
+    scope: Mapped[str] = mapped_column(String(64), primary_key=True)
+    blocked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
