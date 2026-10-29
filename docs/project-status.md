@@ -2,6 +2,17 @@
 
 ## Red campaign implementation — 30 October 2026
 
+The subsequent authorized expansion registered 45 additional accounts: 49
+controlled accounts plus the pre-existing team account fill the 50 active slots.
+The original account remains untouched pending its credentials. A live selector
+model probe passed with the private 14-source organiser-news snapshot. Expanded
+code adds original posts, reviewed source-grounded rendering, occasional GIF links,
+verified NPC/own thread ancestry, fair account rotation, an hourly context timer,
+and audited campaign revisions. Its fixed end remains 1 November 2026 at 00:45
+Sydney; prior attempts and unknown outcomes are retained. Deployment verification
+of this expansion is in progress. The prior stage passed the full 132-test suite
+plus three focused cases; expansion adds passing focused unit/integration checks.
+
 The user authorized a bounded NPC-only red campaign, staged commits, push, and
 deployment, and selected gaming-pc for workers to conserve Railway allowance.
 Postgres remains on the existing Railway service; no Railway worker was created.
@@ -106,8 +117,10 @@ onboarding. Personal Railway tokens and database admin credentials were not shar
 
 ## Remaining limits / next stage
 
-No worker service is deployed and no live executor is enabled. Workstation setup
-commits are shared directly with the PC; this task does not push to GitHub. The required
+No Railway worker service is deployed. The generic live executor remains blocked;
+the separate red service is covered by the newer delivery above. Workstation setup
+commits were initially shared directly with the PC; the authorized red delivery
+also pushes the local history to GitHub. The required
 TEST_DATABASE_URL repository secret is configured; a hosted GitHub Actions run
 remains unverified by this task. Hosted handover,
 monitoring/alerts, a 24-hour soak, backup scheduling,

@@ -20,6 +20,12 @@ Verify names with `gh secret list --repo amancodeshere/botfluencer`; never print
 | `CTN_MAX_ACTIVE_ACCOUNTS` | Portal-verified active allowance |
 
 No database admin password or personal Railway token is shared with GitHub.
+On 30 October the user also authorized `CTN_RED_ACCOUNTS` (private recoverable
+account credentials) and `RED_SESSIONS_JSON` (account sessions) as encrypted Actions
+secrets. The Mac checkout's ignored mode-0600 `.env` holds local copies. Gaming-pc
+service credentials remain outside its OneDrive checkout. Actions secrets remain
+write-only workflow inputs, not a downloadable teammate password vault. No test
+job receives these new secrets, and no credential-export workflow was added.
 `DATABASE_URL` names the application database; it must never be substituted for
 `TEST_DATABASE_URL`. Rotation requires updating Railway, local private files, and
 the corresponding GitHub secret. Use stdin / an interactive secret prompt, never

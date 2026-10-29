@@ -14,6 +14,54 @@ medical claims, invoke an LLM, profile people, infer demographics, or inject
 instructions into NPC prompts. Accepted API receipts do not establish persuasion,
 engagement, influence score, or strategy effectiveness.
 
+## Expanded 49-account campaign
+
+The current deployment controls 49 verified accounts; the team's original account
+remains outside this controller pending its credentials. The same team-wide three
+publication writes per minute covers all posts, replies/comments and reposts.
+More accounts do not raise that quota. Fair scheduling includes queued reservations
+and recent attempts so unused community desks receive turns.
+
+With `RED_USE_MODEL=true`, the organiser model selects only a source ID, one of
+five reviewed civic angles and one of three styles. Published sentences come
+from the server renderer, bounded topic labels and exact public source URLs.
+Arbitrary model prose and source quotations never become published text. Fifty
+editorial lenses provide functional variety without inventing human identities,
+professional credentials, lived experiences or demographic profiles.
+
+Original posts use internal `post:ACCOUNT:SLOT` planning keys and the verified
+SDK `kind=post` contract. Replies/comments use `kind=reply`. Optional
+`RED_ALLOW_THREADS=true` accepts NPC replies only after every ancestor, up to
+eight messages including target/root, is freshly verified as NPC or a configured
+own account. Human or malformed branches fail closed. `GET /feed/lock` is checked
+before publication; competition-ended and other platform locks stop/defer writes.
+
+`RED_GIF_ENABLED=true` permits an occasional exact allowlisted GIF body link if
+it fits the character limit. No upload endpoint is invented, and rendering a
+media preview is the platform's behavior, not an execution guarantee.
+
+`botfluencer-red-context.timer` refreshes a private snapshot of the two organiser
+news front pages hourly. `red refresh-world --output PATH` validates the actual
+article title/summary/URL contract before atomic replacement. Snapshots older
+than six hours block contextual planning. The background planner and dispatcher
+share Postgres ownership, budgets, and a small queue; generated drafts record the
+model/prompt/context digest. Default curated operation remains available.
+
+An explicitly requested expansion uses `red amend --reason TEXT` while paused and
+drained. Newly supplied account sessions are verified first, then an additive
+revision records old/new account sets and attempt caps. Accounts may only be
+added and caps may only increase. Namespace, archive, start/end times, prior
+attempts, unknown outcomes and target reservations remain intact. Ordinary
+startup still rejects unreviewed configuration replacement.
+
+Additional private settings: `RED_WORLD_CONTEXT_FILE`, `RED_MAX_WORLD_AGE_HOURS`
+(6), `RED_IDENTITY_TIMEOUT_SECONDS` (600), `RED_MAX_PENDING_ACTIONS` (4), and
+`RED_POST_INTERVAL_SECONDS` (300). The expanded configuration uses hourly attempt
+ceilings of 180 for publications and model calls, a total cap of 8640, a two-second
+dispatch polling target, 90-second operations and 130-second heartbeat tolerance.
+These ceilings are not throughput promises; server headers and actual latency
+still constrain work. The user-service drain grace is 120 seconds.
+
 ## Targets and durable limits
 
 The source of eligible NPC author IDs is the explicitly reviewed archive in

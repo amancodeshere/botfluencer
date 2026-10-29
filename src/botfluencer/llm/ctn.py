@@ -78,6 +78,8 @@ class CTNGenerator:
             if not isinstance(choices, list) or len(choices) != 1:
                 raise ValueError("Unexpected number of model choices")
             draft = Draft.model_validate_json(choices[0]["message"]["content"])
+            if draft.kind != "reply":
+                raise ValueError("This adapter only generates reply drafts")
             if draft.target_id != observation.external_id:
                 raise ValueError("Model selected an unseen target")
             return draft

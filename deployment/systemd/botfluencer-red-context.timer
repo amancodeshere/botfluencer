@@ -1,0 +1,11 @@
+[Unit]
+Description=Refresh Botfluencer public-world context hourly
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=1h
+Persistent=true
+Unit=botfluencer-red-context.service
+
+[Install]
+WantedBy=timers.target

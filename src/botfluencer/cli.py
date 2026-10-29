@@ -50,6 +50,12 @@ def main() -> None:
     red = commands.add_parser("red", help="Bounded organiser NPC reply campaign")
     red_commands = red.add_subparsers(dest="red_operation", required=True)
     red_commands.add_parser("serve", help="Run the explicitly enabled simulation campaign")
+    amendment = red_commands.add_parser("amend", help="Audit an explicit paused campaign expansion")
+    amendment.add_argument("--reason", required=True)
+    refresh = red_commands.add_parser(
+        "refresh-world", help="Refresh a private organiser news snapshot"
+    )
+    refresh.add_argument("--output", required=True)
     provision = red_commands.add_parser(
         "provision", help="Create private simulation account sessions"
     )
@@ -100,6 +106,17 @@ def main() -> None:
         if args.command == "red":
             if args.red_operation == "serve":
                 asyncio.run(serve(settings, red=True))
+            elif args.red_operation == "amend":
+                from botfluencer.red.config import RedSettings
+                from botfluencer.red.operator import amend
+
+                print(json.dumps(asyncio.run(amend(settings, RedSettings(), args.reason))))
+            elif args.red_operation == "refresh-world":
+                from pathlib import Path
+
+                from botfluencer.red.context import refresh_world
+
+                print(json.dumps(asyncio.run(refresh_world(settings, Path(args.output)))))
             else:
                 from pathlib import Path
 

@@ -17,7 +17,7 @@ class ObservationInput(BaseModel):
 
 class Draft(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    kind: Literal["reply"] = "reply"
+    kind: Literal["reply", "post"] = "reply"
     target_id: str = Field(min_length=1, max_length=128)
     text: str = Field(min_length=1, max_length=500)
 

@@ -70,6 +70,8 @@ async def executor_for(
 
 
 def response_for(request: httpx.Request) -> httpx.Response:
+    if request.url.path == "/api/feed/lock":
+        return httpx.Response(200, json={"locked": False, "reason": None})
     if request.url.path == "/api/auth/me":
         assert request.headers["Authorization"] == "Bearer synthetic-session-token"
         return httpx.Response(200, json={"account": {"account_id": 10}, "team": {"team_id": 99}})
@@ -108,6 +110,7 @@ async def test_reply_wire_contract_uses_account_auth_and_durable_publish_bucket(
         assert receipt.external_id == "124"
         assert receipt.details == {"target_id": "123"}
         assert [call.args[0] for call in executor.transport.pacer.reserve.await_args_list] == [
+            "other_read",
             "other_read",
             "other_read",
             "publish",
@@ -283,7 +286,7 @@ async def test_budget_deferral_prevents_publication() -> None:
 
     async with executor_for(handler) as executor:
         await executor.verify_sessions()
-        executor.transport.pacer.reserve.side_effect = [None, RequestDeferred(60)]
+        executor.transport.pacer.reserve.side_effect = [None, None, RequestDeferred(60)]
         with pytest.raises(SafeRetry):
             await executor.execute(intent())
     assert not writes
@@ -292,7 +295,11 @@ async def test_budget_deferral_prevents_publication() -> None:
 async def test_pacing_storage_failure_after_publication_remains_ambiguous() -> None:
     async with executor_for(response_for) as executor:
         await executor.verify_sessions()
-        executor.transport.pacer.observe.side_effect = [None, RuntimeError("Synthetic DB outage")]
+        executor.transport.pacer.observe.side_effect = [
+            None,
+            None,
+            RuntimeError("Synthetic DB outage"),
+        ]
         with pytest.raises(RuntimeError, match="Synthetic DB outage"):
             await executor.execute(intent())
         assert (await executor.reconcile(intent())).state == "unresolved"

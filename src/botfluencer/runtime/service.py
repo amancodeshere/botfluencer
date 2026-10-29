@@ -105,6 +105,7 @@ async def serve(settings: Settings, *, red: bool = False) -> None:
                     expected_team_id=config.expected_team_id,
                     ends_at=config.ends_at,
                     enabled=True,
+                    allow_threads=config.allow_threads,
                 ),
                 config,
             )

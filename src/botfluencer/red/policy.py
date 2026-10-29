@@ -31,13 +31,22 @@ REPLIES = (
 )
 
 
-def eligible(observation: ObservationInput, npc_ids: frozenset[int], now: datetime) -> bool:
+def eligible(
+    observation: ObservationInput,
+    npc_ids: frozenset[int],
+    now: datetime,
+    *,
+    allow_threads: bool = False,
+) -> bool:
     data = observation.metadata
     if observation.source != "social" or data.get("author_id") not in npc_ids:
         return False
-    if data.get("kind") != "post" or data.get("reply_to_post_id") is not None:
+    if data.get("kind") not in ({"post", "reply"} if allow_threads else {"post"}):
         return False
-    if data.get("root_post_id") not in (None, data.get("post_id")):
+    if data.get("kind") == "post" and (
+        data.get("reply_to_post_id") is not None
+        or data.get("root_post_id") not in (None, data.get("post_id"))
+    ):
         return False
     try:
         created = datetime.fromisoformat(str(data["created_at"]).replace("Z", "+00:00"))
@@ -63,3 +72,40 @@ def eligible(observation: ObservationInput, npc_ids: frozenset[int], now: dateti
 def draft_for(observation: ObservationInput) -> Draft:
     index = int(hashlib.sha256(observation.external_id.encode()).hexdigest(), 16) % len(REPLIES)
     return Draft(target_id=observation.external_id, text=REPLIES[index])
+
+
+# Editorial lenses describe the team's community desks, not invented residents,
+# occupations, demographic identities or medical expertise.
+EDITORIAL_LENSES = (
+    "public accountability",
+    "accessible shared spaces",
+    "clear exemptions",
+    "privacy and proportionality",
+    "practical implementation",
+    "public questions",
+    "fair enforcement",
+    "community discussion",
+    "transparent decisions",
+    "policy review",
+)
+EDITORIAL_STYLES = (
+    "plain-language explainer",
+    "short civic question",
+    "source-led observation",
+    "practical proposal",
+    "respectful conversation",
+)
+EDITORIAL_ROLES = tuple(
+    f"Community desk {index + 1:02d}: {lens}; {style}"
+    for index, (lens, style) in enumerate(
+        (lens, style) for style in EDITORIAL_STYLES for lens in EDITORIAL_LENSES
+    )
+)
+
+
+def role_for(account: str, order: int | None = None) -> str:
+    """Assign stable editorial variety; ordered accounts have fifty unique desks."""
+    index = int(hashlib.sha256(account.encode()).hexdigest(), 16) if order is None else order
+    if index < 0:
+        raise ValueError("Account order must be nonnegative")
+    return EDITORIAL_ROLES[index % len(EDITORIAL_ROLES)]

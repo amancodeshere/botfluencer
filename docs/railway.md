@@ -1,5 +1,11 @@
 # Railway runbook
 
+Worker hosting was changed to **gaming-pc** on 30 October 2026 to conserve the
+Railway hobby allowance. Railway continues to host the existing Postgres service
+only. Do not provision a Railway worker for the red campaign; use
+[red-team operations](red-team.md) and [gaming-pc](gaming-pc.md). The future worker
+deployment section below is a deferred reference, not the current deployment plan.
+
 ## Existing resources
 
 The dedicated [botfluencer project](https://railway.com/project/05c6e05a-bbd5-4085-ab24-e21aa3758bd7)

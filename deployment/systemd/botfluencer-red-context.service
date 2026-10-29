@@ -1,0 +1,15 @@
+[Unit]
+Description=Botfluencer private public-world context refresh
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h
+ExecStart=%h/.local/bin/botfluencer-workstation --env-file /home/aman/.config/botfluencer/red.env botfluencer red refresh-world --output /home/aman/.config/botfluencer/red-world.json
+Environment=PYTHONUNBUFFERED=1
+TimeoutStartSec=180
+UMask=0077
+NoNewPrivileges=true
+StandardOutput=journal
+StandardError=journal

@@ -2,6 +2,7 @@
 
 import json
 from datetime import datetime, timedelta
+from pathlib import Path
 
 from pydantic import AwareDatetime, Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -19,12 +20,22 @@ class RedSettings(BaseSettings):
     max_attempts: int = Field(default=1200, ge=1, le=8640)
     archive_namespace: str = Field(default="ctn-2026", pattern=r"^[a-zA-Z0-9_-]{1,64}$")
     sessions_json: SecretStr
+    use_model: bool = False
+    world_context_file: Path | None = None
+    max_world_age_hours: float = Field(default=6, gt=0, le=24)
+    gif_enabled: bool = False
+    allow_threads: bool = False
+    identity_timeout_seconds: float = Field(default=600, ge=30, le=900)
+    max_pending_actions: int = Field(default=4, ge=1, le=8)
+    post_interval_seconds: float = Field(default=300, ge=60)
 
     @model_validator(mode="after")
     def bounded_window(self) -> "RedSettings":
         duration = self.ends_at - self.starts_at
         if not timedelta(0) < duration <= timedelta(hours=48):
             raise ValueError("Campaign duration must be positive and at most 48 hours")
+        if self.use_model and self.world_context_file is None:
+            raise ValueError("Contextual generation requires a private world snapshot")
         return self
 
     def sessions(self, settings: Settings) -> dict[str, RedSession]:

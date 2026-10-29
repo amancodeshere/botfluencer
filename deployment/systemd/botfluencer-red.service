@@ -12,7 +12,7 @@ ExecStart=%h/.local/bin/botfluencer-workstation --env-file /home/aman/.config/bo
 Environment=PYTHONUNBUFFERED=1
 Restart=on-failure
 RestartSec=5
-TimeoutStopSec=70
+TimeoutStopSec=120
 KillSignal=SIGTERM
 UMask=0077
 NoNewPrivileges=true

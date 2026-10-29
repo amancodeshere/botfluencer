@@ -102,6 +102,17 @@ VRAM is below its total.
 
 ## Private settings and operating limits
 
+The separately authorized red campaign runs as `botfluencer-red.service`, using
+the same named Mamba environment and a self-contained private
+`/home/aman/.config/botfluencer/red.env`. It exposes health only on
+`127.0.0.1:8001` and uses lightweight CPU/HTTP work without loading CUDA models.
+Postgres remains on Railway; no Railway worker was provisioned. See
+[red-team operations](red-team.md) for limits, pause, status and recovery.
+
+Windows AC sleep timeout was inspected during deployment and is already set to
+never sleep. Power settings were not changed. Full Windows reboot recovery is
+still unverified; keep the PC powered and its existing WSL startup task intact.
+
 Private environment files belong under `/home/aman/.config/botfluencer` with
 directory mode 0700 and file mode 0600. Use an explicit `--env-file` there; never
 put application/test credentials in OneDrive. Test jobs receive only the

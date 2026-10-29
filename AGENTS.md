@@ -5,11 +5,12 @@
 Botfluencer is this team's Capture the Narrative 2026 competition workspace.
 The team is enrolled and portal readiness is verified. Official SDK 0.5.0,
 2026 contracts, quotas, and scoring references are recorded in docs/competition.md.
-Hosting choice: Railway. Durable storage: Postgres for observations, decisions,
-actions, outcomes, and runtime controls. Current work package: scaffolding and
-operational reliability. Default mock/replay/noop takes no actions. Async CTN
-read/model adapters are gated by explicit opt-in and competition opening; live
-publishing remains blocked. Read docs/bots.md before adding strategies.
+Hosting: workers on gaming-pc over SSH; existing Railway Postgres stores
+observations, decisions, actions, outcomes, and runtime controls. Do not provision
+Railway worker services. Default mock/replay/noop takes no actions. Async CTN
+read/model adapters are gated by explicit opt-in and competition opening. The
+generic live executor remains blocked; a separately enabled, bounded NPC-only
+red campaign follows docs/red-team.md. Read docs/bots.md before adding strategies.
 
 Do not invent competition endpoints, limits, scores, credentials, or winning
 strategies. Implement or enable real competition actions only after an explicit

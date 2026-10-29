@@ -233,3 +233,15 @@ class RedTarget(Base):
     author_id: Mapped[int] = mapped_column(BigInteger)
     action_id: Mapped[UUID] = mapped_column(ForeignKey("actions.id"), unique=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class RedCampaignRevision(Base):
+    __tablename__ = "red_campaign_revisions"
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    scope: Mapped[str] = mapped_column(String(64))
+    previous_accounts: Mapped[list[str]] = mapped_column(JSONB)
+    accounts: Mapped[list[str]] = mapped_column(JSONB)
+    previous_max_attempts: Mapped[int]
+    max_attempts: Mapped[int]
+    reason: Mapped[str] = mapped_column(String(500))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
