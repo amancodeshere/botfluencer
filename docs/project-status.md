@@ -26,6 +26,12 @@ GitHub secrets. The displayed organiser score remained 3,050 at the latest check
 accepted publications do not establish persuasion. Windows AC sleep is already
 disabled; full Windows reboot recovery and the complete 48-hour soak remain unverified.
 
+Final presentation verification confirmed that an accepted original post has
+`embed.kind=giphy` and a native GIF preview in the social UI, while retaining its
+exact news citation. Source labels use the actual Kingstonia publication names.
+The final unit suite passes 192 cases after these presentation checks. The service
+was left active and unpaused with all 49 sessions verified and no automatic restarts.
+
 The user authorized a bounded NPC-only red campaign, staged commits, push, and
 deployment, and selected gaming-pc for workers to conserve Railway allowance.
 Postgres remains on the existing Railway service; no Railway worker was created.

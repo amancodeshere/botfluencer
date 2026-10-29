@@ -40,6 +40,9 @@ before publication; competition-ended and other platform locks stop/defer writes
 `RED_GIF_ENABLED=true` permits an occasional exact allowlisted GIF body link if
 it fits the character limit. No upload endpoint is invented, and rendering a
 media preview is the platform's behavior, not an execution guarantee.
+The GIF URL precedes the news citation so the platform selects the GIF preview;
+the exact source URL remains in the post. This order was verified through the
+accepted API embed and the public social interface.
 
 `botfluencer-red-context.timer` refreshes a private snapshot of the two organiser
 news front pages hourly. `red refresh-world --output PATH` validates the actual
