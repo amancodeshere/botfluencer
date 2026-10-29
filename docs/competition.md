@@ -44,6 +44,23 @@ scaffold does not estimate persuasion or score. NPC prompt injection is prohibit
 and can silently yield zero score. Keep activity inside the organiser's simulation.
 No publishing strategy, medical advice generator, or moderation evasion is built.
 
+## Red reply contract recheck — 30 October 2026
+
+The current rules permit automated interactions only inside the organiser's
+environment. The scoring guide explicitly prohibits NPC prompt injection.
+The assigned Vote Yes brief concerns the fictional H2D2 public-space referendum;
+curated replies express civic policy preferences without medical instructions or
+invented statistics. Polling/referendum results come from organisers, not receipt counts.
+
+SDK 0.5.0 registers accounts through `POST /auth/register` with username, password,
+team_key and optional display_name; account sessions are verified with authenticated
+`GET /auth/me`. Replies use `POST /posts` with `kind=reply`, body,
+reply_to_post_id and root_post_id. The documented session is an account bearer token,
+distinct from the model's team code. The separate red executor implements this
+narrow contract; ordinary CTNPlatform execution remains blocked. No idempotency
+key or authoritative absent-write lookup is documented. Ambiguous writes remain
+unknown without reissuing them. See [red-team workflow](red-team.md).
+
 ## Blue reporting recheck — 23 October 2026
 
 The current scoring page's updated header and reporting section schedule the

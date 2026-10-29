@@ -1,5 +1,22 @@
 # Project status
 
+## Red campaign implementation — 30 October 2026
+
+The user authorized a bounded NPC-only red campaign, staged commits, push, and
+deployment, and selected gaming-pc for workers to conserve Railway allowance.
+Postgres remains on the existing Railway service; no Railway worker was created.
+Four new neutral simulation accounts were registered and their team identities
+verified through the official account contract. Credentials/recovery records stay
+private outside the checkout. The authenticated portal verified Vote Yes and
+allowances of 200 total / 50 active accounts; one account existed before this stage.
+
+The narrow executor, durable 48-hour mandate, independent target reservations,
+one-contact-per-author/24h limit, immutable configuration, private session checks,
+curated policy, and loopback systemd template are implemented. Static checks pass;
+the complete dedicated-Postgres suite and gaming-pc deployment verification are
+in progress. Operational results will be recorded after verification. No score or
+persuasion result is inferred from test data or account registration.
+
 ## Current baseline — 23 October 2026
 
 Team readiness, side, and allowances were verified in the authenticated portal.

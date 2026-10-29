@@ -85,3 +85,26 @@ The resident workstation service defaults to collection/shadow scoring. Reports
 require private account authentication and opt-in; automatic approval additionally
 requires independent real-label evaluation. Moderator outcome ingestion is
 manual until its authenticated payload contract can be verified. See blue-team.md.
+
+## Bounded red campaign
+
+`red/` adds a separate `red serve` entrypoint; ordinary CTNPlatform execution and
+the generic live-mode gate remain blocked. This workload uses the same durable
+action ledger and namespace ownership. Additive migration 0005 stores an immutable
+team campaign (namespace, UTC window of at most 48 hours, accounts, source archive,
+and total attempt limit), plus team/target reservations independent of prompt and
+strategy versions. One reserved contact per author per 24 hours limits repeat replies.
+
+The reviewed NPC source is the existing team-confirmed pre-opening archive; later
+unverified posts never establish identity, conflicting player labels are excluded,
+and own accounts cannot be targets. A fresh target read must confirm a top-level
+NPC post before a reply. No mentions or human-root threads are permitted. Curated
+civic arguments use public topic matching and do not consume model quota or infer
+personal traits. Skip decisions persist so irrelevant observations advance.
+
+Account sessions must match the configured team through authenticated `/auth/me`.
+The SDK reply contract uses `POST /posts`; there is no idempotency guarantee.
+Timeouts, 5xx, interrupted calls and malformed acknowledgements remain unknown;
+only explicit pre-call deferrals and 429 responses allow safe retry. The fixed
+deadline is checked before claims and again before the HTTP write. Postgres remains
+on Railway, while a loopback-only systemd user service runs on gaming-pc.

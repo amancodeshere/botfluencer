@@ -13,6 +13,7 @@ COMPETITION_OPENS = datetime(2026, 10, 19, 17, tzinfo=ZoneInfo("Australia/Sydney
 # Conservative bootstrap pacing only. Server headers and Retry-After update it.
 # Shared team allowances, not per-account allowances; auth is per network address.
 INITIAL_INTERVAL_SECONDS = {
+    "auth": 13.0,
     "feed": 6.0,
     "other_read": 0.2,
     "publish": 20.0,

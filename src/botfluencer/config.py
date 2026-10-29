@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     retry_base_seconds: float = Field(default=2, gt=0)
     fixture_path: Path = Path("fixtures/feed.jsonl")
     port: int = Field(default=8000, ge=1, le=65535, validation_alias="PORT")
+    bind_host: Literal["0.0.0.0", "127.0.0.1"] = "0.0.0.0"
     ctn_team_code: SecretStr | None = Field(default=None, validation_alias="CTN_TEAM_CODE")
     ctn_side: Literal["Vote Yes", "Vote No"] | None = Field(
         default=None, validation_alias="CTN_SIDE"

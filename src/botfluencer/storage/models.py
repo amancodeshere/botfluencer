@@ -209,3 +209,27 @@ class BlueTeamControl(Base):
     __tablename__ = "blue_team_controls"
     scope: Mapped[str] = mapped_column(String(64), primary_key=True)
     blocked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class RedCampaign(Base):
+    """One immutable bounded campaign per team; restart cannot extend its mandate."""
+
+    __tablename__ = "red_campaigns"
+    scope: Mapped[str] = mapped_column(String(64), primary_key=True)
+    namespace: Mapped[str] = mapped_column(String(64), unique=True)
+    starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    max_attempts: Mapped[int]
+    archive_namespace: Mapped[str] = mapped_column(String(64))
+    accounts: Mapped[list[str]] = mapped_column(JSONB)
+
+
+class RedTarget(Base):
+    """Team/target reservation survives versions, namespaces and ambiguous writes."""
+
+    __tablename__ = "red_targets"
+    scope: Mapped[str] = mapped_column(String(64), primary_key=True)
+    post_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    author_id: Mapped[int] = mapped_column(BigInteger)
+    action_id: Mapped[UUID] = mapped_column(ForeignKey("actions.id"), unique=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

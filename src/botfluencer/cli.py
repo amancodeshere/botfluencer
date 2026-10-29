@@ -47,6 +47,15 @@ def main() -> None:
     run = commands.add_parser("run", help="Run the mock worker without HTTP")
     run.add_argument("--ticks", type=int, help="Stop after this many successful ticks")
     commands.add_parser("serve", help="Supervise worker and HTTP health server")
+    red = commands.add_parser("red", help="Bounded organiser NPC reply campaign")
+    red_commands = red.add_subparsers(dest="red_operation", required=True)
+    red_commands.add_parser("serve", help="Run the explicitly enabled simulation campaign")
+    provision = red_commands.add_parser(
+        "provision", help="Create private simulation account sessions"
+    )
+    provision.add_argument("--output", required=True)
+    provision.add_argument("--count", type=int, default=4)
+    provision.add_argument("--team-id", type=int, required=True)
     check = commands.add_parser(
         "doctor", help="Validate baseline setup without exposing credentials"
     )
@@ -88,7 +97,27 @@ def main() -> None:
     configure_logging()
     try:
         settings = Settings()
-        if args.command == "blue":
+        if args.command == "red":
+            if args.red_operation == "serve":
+                asyncio.run(serve(settings, red=True))
+            else:
+                from pathlib import Path
+
+                from botfluencer.red.provision import provision as provision_accounts
+
+                print(
+                    json.dumps(
+                        asyncio.run(
+                            provision_accounts(
+                                settings,
+                                Path(args.output),
+                                args.count,
+                                expected_team_id=args.team_id,
+                            )
+                        )
+                    )
+                )
+        elif args.command == "blue":
             blue_config = BlueSettings()
             if args.blue_operation == "watch":
                 settings = settings.model_copy(

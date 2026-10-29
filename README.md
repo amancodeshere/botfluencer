@@ -5,7 +5,9 @@ Postgres provide a durable baseline for future bot strategies. The official SDK
 is pinned to 0.5.0; async adapters follow its documented wire contracts.
 
 The default is `mock` + `replay` + `noop`: fixture observations are persisted,
-without generated drafts or actions. Real publishing remains unavailable.
+without generated drafts or actions. The separate, explicitly enabled
+`botfluencer red serve` workload can publish bounded replies to confirmed NPCs
+inside the organiser simulation; see [red-team operations](docs/red-team.md).
 
 ## Get running
 
@@ -58,6 +60,8 @@ serializes integration runs. Read [operations](docs/operations.md) for details.
 
 - [Blue-team workflow](docs/blue-team.md): private training notebooks, scheduled feed/scoring,
   author evidence, and opt-in moderation reports.
+- [Red-team workflow](docs/red-team.md): a bounded NPC-only campaign hosted on gaming-pc,
+  private account sessions, team-wide deduplication, and durable stop controls.
 - [GPU workstation](docs/gaming-pc.md): gaming-pc SSH, Mamba, CUDA, and local training checks.
 - [Post collection](docs/post-collection.md): archive live public posts without publishing.
 - [Team access](docs/team-access.md): GitHub secrets, shared settings, and teammate onboarding.
@@ -67,5 +71,6 @@ serializes integration runs. Read [operations](docs/operations.md) for details.
 - [Railway runbook](docs/railway.md): existing database and future worker deployment.
 - [Project status](docs/project-status.md): checks, limitations, and next steps.
 
-A database service is provisioned. No hosted worker has been deployed or
-competition account created. Synthetic outcomes describe execution, not score.
+A Railway database service is provisioned; workers run on gaming-pc to conserve
+the hosting allowance. The red campaign has separate private credentials and
+controls. Synthetic outcomes describe execution, not score.

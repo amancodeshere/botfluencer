@@ -34,7 +34,7 @@ def build_worker(database: Database) -> Worker:
 
 
 async def close_worker(worker: Worker) -> None:
-    if isinstance(worker.platform, CTNPlatform):
+    if hasattr(worker.platform, "transport"):
         await worker.platform.transport.close()
 
 
@@ -79,15 +79,41 @@ async def supervise(worker: Worker, server: uvicorn.Server) -> None:
                 await asyncio.gather(worker_task, server_task, return_exceptions=True)
 
 
-async def serve(settings: Settings) -> None:
+async def serve(settings: Settings, *, red: bool = False) -> None:
     database = Database(settings)
-    worker = None
+    worker: Worker | None = None
     try:
-        worker = build_worker(database)
+        if red:
+            from botfluencer.red.config import RedSettings
+            from botfluencer.red.executor import ReplyExecutor
+            from botfluencer.red.store import RedStore
+            from botfluencer.red.worker import RedWorker
+
+            config = RedSettings()
+            if not config.enable_replies:
+                raise ValueError("RED_ENABLE_REPLIES must explicitly enable the red service")
+            sessions = config.sessions(settings)
+            transport = CompetitionTransport(settings, TeamPacer(database))
+            repo = RedStore(database)
+            repo.config, repo.scope = config, transport.pacer.scope
+            worker = RedWorker(
+                repo,
+                ReplyExecutor(
+                    transport,
+                    sessions,
+                    npc_author_ids=frozenset(),
+                    expected_team_id=config.expected_team_id,
+                    ends_at=config.ends_at,
+                    enabled=True,
+                ),
+                config,
+            )
+        else:
+            worker = build_worker(database)
         server = RuntimeServer(
             uvicorn.Config(
                 create_app(worker),
-                host="0.0.0.0",
+                host=settings.bind_host,
                 port=settings.port,
                 access_log=False,
                 log_config=None,
