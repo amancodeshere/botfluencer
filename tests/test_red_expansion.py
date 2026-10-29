@@ -290,7 +290,7 @@ def test_raw_source_claims_and_instructions_cannot_become_published_prose(raw: s
         world=context,
     )
     assert draft.text == (
-        "Organiser news on local news coverage: "
+        "Kingstonia news on local news coverage: "
         + ARGUMENTS["privacy"]["question"]
         + " "
         + context.sources[0].url
@@ -969,3 +969,74 @@ async def test_context_deadline_stops_before_private_path_database_or_network(
     database.assert_not_called()
     transport.assert_not_called()
     assert not output.exists() and not output.parent.exists()
+
+
+@pytest.mark.parametrize(
+    "url,publisher",
+    [
+        ("https://sites.legitreal.com/daily-kingstonia/articles/synthetic", "Daily Kingstonia"),
+        ("https://sites.legitreal.com/kingstonia-herald/articles/synthetic", "Kingstonia Herald"),
+        ("https://sites.legitreal.com/unknown-publication/articles/synthetic", "Kingstonia news"),
+        ("https://capturethenarrative.com/info/competitions/2026/rules/", "Referendum briefing"),
+    ],
+)
+def test_rendered_publisher_comes_from_reviewed_source_path(url: str, publisher: str) -> None:
+    from botfluencer.domain import ObservationInput
+    from botfluencer.red.generator import render_selection
+
+    context = grounded_world()
+    context.sources[0].url = url
+    context.sources[0].title = "Arbitrary invented publisher cannot override attribution"
+    draft = render_selection(
+        generated(),
+        observation=ObservationInput(external_id="post:10:1234", text="Fixture"),
+        account="10",
+        kind="post",
+        world=context,
+    )
+    assert draft.text.startswith(publisher + " on ")
+    assert "Arbitrary invented publisher" not in draft.text
+    assert draft.text.endswith(url)
+
+
+async def test_generated_gif_precedes_citation_and_preserves_source_url_and_length() -> None:
+    import hashlib
+    import re
+    from types import SimpleNamespace
+
+    from botfluencer.domain import ObservationInput
+    from botfluencer.red.generator import ContextualGenerator
+    from botfluencer.red.world import ALLOWED_GIF_URLS
+
+    @asynccontextmanager
+    async def leadership(_scope: str):
+        yield SimpleNamespace(invalidated=False, closed=False, execute=AsyncMock())
+
+    target = next(
+        f"post:10:{slot}"
+        for slot in range(1000)
+        if hashlib.sha256(f"10:post:10:{slot}".encode()).digest()[0] % 8 == 0
+    )
+    selection = generated(target_id=target)
+    request = AsyncMock(
+        return_value={"choices": [{"message": {"content": selection.model_dump_json()}}]}
+    )
+    transport = SimpleNamespace(
+        settings=SimpleNamespace(ctn_side="Vote Yes", ctn_llm_max_tokens=150),
+        request=request,
+        clock=lambda: COMPETITION_OPENS,
+        pacer=SimpleNamespace(
+            scope="synthetic-team", database=SimpleNamespace(leadership=leadership)
+        ),
+    )
+    context = grounded_world()
+    draft = await ContextualGenerator(transport, context, gif_enabled=True).generate(
+        ObservationInput(external_id=target, text="Synthetic original slot"),
+        account="10",
+        kind="post",
+    )
+    urls = re.findall(r"https://\S+", draft.text)
+    assert urls[0] in ALLOWED_GIF_URLS
+    assert urls[-1] == context.sources[0].url
+    assert draft.text.endswith(context.sources[0].url)
+    assert len(draft.text) <= 500

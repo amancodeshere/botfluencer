@@ -172,11 +172,14 @@ def render_selection(
     source = next((source for source in world.sources if source.id == selection.source_id), None)
     if source is None:
         raise ValueError("Model selected an unknown source")
-    publisher = (
-        "Organiser news"
-        if urlsplit(source.url).hostname == "sites.legitreal.com"
-        else "Organiser reference"
-    )
+    source_url = urlsplit(source.url)
+    if source_url.hostname == "sites.legitreal.com":
+        publisher = {
+            "daily-kingstonia": "Daily Kingstonia",
+            "kingstonia-herald": "Kingstonia Herald",
+        }.get(source_url.path.strip("/").split("/")[0], "Kingstonia news")
+    else:
+        publisher = "Referendum briefing"
     body = (
         f"{publisher} on {_topic_label(source)}: "
         f"{ARGUMENTS[selection.angle][selection.style]} {source.url}"
@@ -220,7 +223,7 @@ class ContextualGenerator:
                     "max_world_age_hours": max_world_age_hours,
                     "gif_enabled": gif_enabled,
                     "gif_urls": sorted(ALLOWED_GIF_URLS),
-                    "renderer_version": "contextual-red-selector-v2",
+                    "renderer_version": "contextual-red-selector-v3",
                 },
                 sort_keys=True,
             ).encode()
@@ -298,5 +301,10 @@ class ContextualGenerator:
         if self.gif_enabled and kind == "post" and gif_slot % 8 == 0 and not distress:
             gif = sorted(ALLOWED_GIF_URLS)[0]
             if len(draft.text) + len(gif) + 1 <= 500:
-                draft = Draft(kind=kind, target_id=draft.target_id, text=draft.text + " " + gif)
+                # The platform previews the first body URL. Keep the exact news
+                # citation, but put the selected GIF ahead of it for visual posts.
+                prefix = draft.text.removesuffix(source.url)
+                draft = Draft(
+                    kind=kind, target_id=draft.target_id, text=prefix + gif + " " + source.url
+                )
         return draft
