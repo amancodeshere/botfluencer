@@ -36,37 +36,38 @@ class RedWorker(Worker):
         now = self.executor.transport.clock()
         active = self.config.starts_at <= now < self.config.ends_at
         if not self.state.paused and active:
-            await self.store.observe(await self.store.candidates(self.executor.npc_author_ids))
-            for _ in range(8):
-                observation = await self.store.unplanned(
-                    DISPATCHER, STRATEGY_VERSION, PROMPT_VERSION
-                )
-                if observation is None:
-                    break
-                source = ObservationInput.model_validate(observation.payload)
-                if not eligible(source, self.executor.npc_author_ids, now):
-                    await self.store.skip(
-                        observation.id, source.external_id, "Ineligible NPC/top-level/topic/age"
+            if not await self.store.has_pending():
+                await self.store.observe(await self.store.candidates(self.executor.npc_author_ids))
+                for _ in range(8):
+                    observation = await self.store.unplanned(
+                        DISPATCHER, STRATEGY_VERSION, PROMPT_VERSION
                     )
-                    continue
-                accounts = sorted(self.executor.sessions)
-                index = int(hashlib.sha256(source.external_id.encode()).hexdigest(), 16) % len(
-                    accounts
-                )
-                planned = await self.store.plan_reply(
-                    observation.id,
-                    int(source.metadata["author_id"]),
-                    accounts[index],
-                    draft_for(source),
-                )
-                if not planned:
-                    await self.store.skip(
+                    if observation is None:
+                        break
+                    source = ObservationInput.model_validate(observation.payload)
+                    if not eligible(source, self.executor.npc_author_ids, now):
+                        await self.store.skip(
+                            observation.id, source.external_id, "Ineligible NPC/top-level/topic/age"
+                        )
+                        continue
+                    accounts = sorted(self.executor.sessions)
+                    index = int(hashlib.sha256(source.external_id.encode()).hexdigest(), 16) % len(
+                        accounts
+                    )
+                    planned = await self.store.plan_reply(
                         observation.id,
-                        source.external_id,
-                        "Team target/contact limit or campaign bound",
+                        int(source.metadata["author_id"]),
+                        accounts[index],
+                        draft_for(source),
                     )
-                    continue
-                break
+                    if not planned:
+                        await self.store.skip(
+                            observation.id,
+                            source.external_id,
+                            "Team target/contact limit or campaign bound",
+                        )
+                        continue
+                    break
             intent = await self.store.claim()
             if intent is not None:
                 await self.execute(intent)

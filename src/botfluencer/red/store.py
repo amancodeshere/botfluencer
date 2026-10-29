@@ -212,6 +212,19 @@ class RedStore(Repository):
                 return None
             return await super().claim(allowed_accounts)
 
+    async def has_pending(self) -> bool:
+        async with self.db.sessions() as session:
+            return bool(
+                await session.scalar(
+                    select(
+                        exists().where(
+                            Action.namespace == self.namespace,
+                            Action.status.in_(("queued", "in_flight")),
+                        )
+                    )
+                )
+            )
+
     async def _used_total(self) -> int:
         from botfluencer.storage.models import UsageEvent
 

@@ -241,3 +241,46 @@ async def test_archive_discovery_excludes_ineligible_observed_and_contacted_post
     assert await store.candidates(frozenset()) == []
     await store.observe(items)
     assert await store.candidates(frozenset({7, 8})) == []
+
+
+@pytest.mark.parametrize("claim_available", [False, True])
+async def test_pending_work_blocks_planning_but_keeps_dispatch_and_heartbeat(
+    claim_available: bool,
+) -> None:
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    from botfluencer.red.worker import RedWorker
+    from botfluencer.runtime.worker import WorkerState
+
+    claimed = object() if claim_available else None
+    store = SimpleNamespace(
+        is_paused=AsyncMock(return_value=False),
+        has_pending=AsyncMock(return_value=True),
+        candidates=AsyncMock(),
+        observe=AsyncMock(),
+        unplanned=AsyncMock(),
+        plan_reply=AsyncMock(),
+        claim=AsyncMock(return_value=claimed),
+        heartbeat=AsyncMock(),
+    )
+    worker = RedWorker.__new__(RedWorker)
+    worker.store = store
+    worker.config = config("synthetic-pending")
+    worker.executor = SimpleNamespace(transport=SimpleNamespace(clock=lambda: datetime.now(UTC)))
+    worker.id = uuid4()
+    worker.state = WorkerState()
+    worker.execute = AsyncMock()
+    await worker.tick()
+    store.has_pending.assert_awaited_once()
+    store.candidates.assert_not_awaited()
+    store.observe.assert_not_awaited()
+    store.unplanned.assert_not_awaited()
+    store.plan_reply.assert_not_awaited()
+    store.claim.assert_awaited_once()
+    store.heartbeat.assert_awaited_once_with(worker.id)
+    assert worker.state.heartbeat_monotonic is not None
+    if claim_available:
+        worker.execute.assert_awaited_once_with(claimed)
+    else:
+        worker.execute.assert_not_awaited()

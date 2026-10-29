@@ -48,6 +48,8 @@ period. Rejected, interrupted, and unknown outcomes retain those reservations.
 execution attempts; `BOT_MAX_ACTIONS_PER_HOUR` additionally bounds attempts in
 the runtime namespace. Failed calls and safe deferrals after claim consume an
 attempt. Account cooldowns and attempt limits remain in the durable ledger.
+The coordinator drains existing queued/in-flight work before planning another
+reply, so hourly caps and server backoff cannot build an unbounded draft queue.
 
 The campaign has timezone-aware start and end instants, with a positive duration
 of at most 48 hours. Its namespace, times, total cap, archive namespace, and
