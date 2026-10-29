@@ -931,3 +931,41 @@ async def test_contextual_planner_persists_contact_and_planning_skips_without_re
         generator.generate.assert_not_awaited()
         store.plan_reply.assert_not_awaited()
         assert store.skip.await_args.args[2] == "Team contact already reserved"
+
+
+@pytest.mark.parametrize("deadline", ["2000-01-01T00:00:00Z", "2000-01-01T00:00:00", "invalid"])
+async def test_context_deadline_stops_before_private_path_database_or_network(
+    tmp_path,
+    monkeypatch,
+    deadline: str,
+) -> None:
+    import botfluencer.red.context as module
+
+    monkeypatch.setenv("RED_ENDS_AT", deadline)
+    database = MagicMock(
+        side_effect=AssertionError("Expired context refresh must not initialize DB")
+    )
+    transport = MagicMock(
+        side_effect=AssertionError("Expired context refresh must not initialize HTTP")
+    )
+    monkeypatch.setattr(module, "Database", database)
+    monkeypatch.setattr(module, "CompetitionTransport", transport)
+    monkeypatch.setattr(module, "require_open", lambda: None)
+    output = tmp_path / "not-created" / "world.json"
+    settings = Settings(
+        _env_file=None,
+        DATABASE_URL="postgresql://test@localhost/botfluencer_test",
+        CTN_TEAM_CODE="TESTTEAM00000001",
+        CTN_NETWORK_ENABLED=True,
+    )
+    if deadline.endswith("Z"):
+        assert await module.refresh_world(settings, output) == {
+            "status": "campaign_expired",
+            "source_count": 0,
+        }
+    else:
+        with pytest.raises(ValueError):
+            await module.refresh_world(settings, output)
+    database.assert_not_called()
+    transport.assert_not_called()
+    assert not output.exists() and not output.parent.exists()

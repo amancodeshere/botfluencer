@@ -99,8 +99,14 @@ The reviewed NPC source is the existing team-confirmed pre-opening archive; late
 unverified posts never establish identity, conflicting player labels are excluded,
 and own accounts cannot be targets. A fresh target read must confirm a top-level
 NPC post before a reply. No mentions or human-root threads are permitted. Curated
-civic arguments use public topic matching and do not consume model quota or infer
-personal traits. Skip decisions persist so irrelevant observations advance.
+civic arguments use public topic matching without inferring personal traits.
+Expanded mode uses the organiser model only to select finite reviewed angles,
+styles and source IDs; no free model prose crosses the publishing boundary.
+Private news snapshots refresh hourly and expire after six hours. A bounded
+background planner keeps a small queue while the sole owner dispatches actions.
+Skip decisions persist independently of prompt versions so irrelevant or already
+contacted observations advance. Explicit paused/drained expansions append an
+audit revision before adding accounts or increasing caps; deadlines never reset.
 
 Account sessions must match the configured team through authenticated `/auth/me`.
 The SDK reply contract uses `POST /posts`; there is no idempotency guarantee.

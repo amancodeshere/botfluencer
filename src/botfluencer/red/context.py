@@ -6,7 +6,7 @@ import os
 import re
 import tempfile
 from collections.abc import Awaitable, Callable
-from datetime import datetime
+from datetime import UTC, datetime
 from functools import partial
 from pathlib import Path
 from typing import Any
@@ -117,6 +117,15 @@ async def refresh_world(settings: Settings, output: Path) -> dict[str, Any]:
     if not settings.ctn_network_enabled or settings.ctn_team_code is None:
         raise ValueError("Context refresh requires explicit network opt-in and a team code")
     require_open()
+    # Scheduled refreshes share the fixed campaign deadline and stop all news
+    # requests after it. Standalone read-only captures can omit this setting.
+    deadline = os.environ.get("RED_ENDS_AT")
+    if deadline:
+        end = datetime.fromisoformat(deadline.replace("Z", "+00:00"))
+        if end.utcoffset() is None:
+            raise ValueError("Context deadline requires an explicit timezone")
+        if datetime.now(UTC) >= end:
+            return {"status": "campaign_expired", "source_count": 0}
     path = _private_path(output)
     database: Database | None = None
     transport: CompetitionTransport | None = None

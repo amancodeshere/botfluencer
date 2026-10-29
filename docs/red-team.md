@@ -8,10 +8,11 @@ lightweight CPU code and HTTP requests; it does not load a model or use CUDA.
 See [gaming-pc.md](gaming-pc.md) for the workstation paths and SSH setup.
 
 Only the organiser's fictional CTN simulation is supported. One coordinator
-assigns replies across configured simulation accounts. The reviewed policy uses
-curated fictional civic arguments from `red/policy.py`; it does not generate
-medical claims, invoke an LLM, profile people, infer demographics, or inject
-instructions into NPC prompts. Accepted API receipts do not establish persuasion,
+assigns work across configured simulation accounts. The default policy uses
+curated civic replies. The expanded policy uses a model to select reviewed
+arguments and sources; it does not publish arbitrary model prose, generate
+medical claims, profile people, infer demographics, or inject instructions into
+NPC prompts. Accepted API receipts do not establish persuasion,
 engagement, influence score, or strategy effectiveness.
 
 ## Expanded 49-account campaign
@@ -75,10 +76,11 @@ badges, writing style, and model predictions do not establish NPC origin. New or
 unlabelled authors remain ineligible. The worker loads the reviewed ID set at
 startup; restart after an independently reviewed archive correction.
 
-Only top-level NPC posts about the configured fictional referendum topics and
+By default, only top-level NPC posts about the fictional referendum topics and
 at most four hours old are considered. The executor reads the target again
 before publishing and checks its author, kind, and thread root. A reply under
-another thread is ineligible. Reply bodies containing `@` are rejected because
+another thread requires the explicit verified-ancestry setting described above.
+Reply bodies containing `@` are rejected because
 the platform automatically notifies mentioned accounts.
 
 Discovery uses recent posts from the existing blue collector's Postgres archive,
@@ -89,8 +91,8 @@ executor retrieves the current post and verifies its top-level structure. The
 blue collector must continue collecting into the configured archive; once its
 posts age past four hours the red worker safely idles.
 
-Postgres persists a team-wide reservation for each target before an action is
-created. The same post cannot receive another planned reply across accounts or
+Postgres commits each team-wide target reservation and action intent together,
+before execution. The same post cannot receive another planned reply across accounts or
 policy versions. At most one target per NPC author is reserved in any 24-hour
 period. Rejected, interrupted, and unknown outcomes retain those reservations.
 `RED_MAX_ATTEMPTS` bounds both total target reservations and total claimed
@@ -103,8 +105,10 @@ reply, so hourly caps and server backoff cannot build an unbounded draft queue.
 The campaign has timezone-aware start and end instants, with a positive duration
 of at most 48 hours. Its namespace, times, total cap, archive namespace, and
 account set are persisted under the team scope. Restarts cannot extend the end
-time, replace those values, or reset the caps. After expiry the process keeps
-its heartbeat but makes no new observations or reply attempts. An existing
+time, replace those values, or reset the caps. Only the audited, explicitly requested
+expansion command can add accounts or increase the cap. After expiry the process keeps
+its heartbeat but makes no new observations or publication attempts. The context
+timer also stops making news requests once that same deadline passes. An existing
 campaign must not be deleted or given a new namespace to evade its mandate.
 
 ## Private configuration

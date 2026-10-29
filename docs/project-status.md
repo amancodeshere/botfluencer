@@ -9,9 +9,22 @@ model probe passed with the private 14-source organiser-news snapshot. Expanded
 code adds original posts, reviewed source-grounded rendering, occasional GIF links,
 verified NPC/own thread ancestry, fair account rotation, an hourly context timer,
 and audited campaign revisions. Its fixed end remains 1 November 2026 at 00:45
-Sydney; prior attempts and unknown outcomes are retained. Deployment verification
-of this expansion is in progress. The prior stage passed the full 132-test suite
-plus three focused cases; expansion adds passing focused unit/integration checks.
+Sydney; prior attempts and unknown outcomes are retained. The service confirmed all
+49 sessions and 1,450 reviewed NPC IDs before readiness. After resuming, the new
+model-selected original post was accepted with a matching receipt. Loopback worker
+health is active/fresh, with no automatic restarts during expanded verification.
+The hourly context refresh succeeded and its timer is active; blue collection is
+running with all 49 accounts excluded. The prior stage passed the full 132-test
+suite plus three focused cases. The expanded tree passes 187 unit cases, four new
+Postgres integration cases, and 14 focused pacing/client/config checks, including
+concurrent quota reservations. Ruff, formatting and strict mypy pass.
+
+The live portal confirms 50 registered, zero banned, maximum 50 active accounts;
+the original account is not controlled by this service. Credentials were saved
+only in the ignored local environment, private workstation files and encrypted
+GitHub secrets. The displayed organiser score remained 3,050 at the latest check;
+accepted publications do not establish persuasion. Windows AC sleep is already
+disabled; full Windows reboot recovery and the complete 48-hour soak remain unverified.
 
 The user authorized a bounded NPC-only red campaign, staged commits, push, and
 deployment, and selected gaming-pc for workers to conserve Railway allowance.
