@@ -32,6 +32,14 @@ before publishing and checks its author, kind, and thread root. A reply under
 another thread is ineligible. Reply bodies containing `@` are rejected because
 the platform automatically notifies mentioned accounts.
 
+Discovery uses recent posts from the existing blue collector's Postgres archive,
+bounded to eight unseen candidates per tick. This avoids competitor traffic
+crowding known NPC posts out of the latest-feed window and saves shared feed
+quota. Archive rows do not supply thread roots: those remain unknown until the
+executor retrieves the current post and verifies its top-level structure. The
+blue collector must continue collecting into the configured archive; once its
+posts age past four hours the red worker safely idles.
+
 Postgres persists a team-wide reservation for each target before an action is
 created. The same post cannot receive another planned reply across accounts or
 policy versions. At most one target per NPC author is reserved in any 24-hour
@@ -169,8 +177,8 @@ and `blue` commands as described in [blue-team.md](blue-team.md).
 
 All intents and attempt budgets commit before the external write. A singleton
 Postgres advisory lock permits one active red worker per namespace. Red and blue
-share the Postgres team pacer: feed reads consume the same team feed allowance,
-and red replies use the shared publication bucket. Durable server rate headers
+share the Postgres team pacer. Blue collects feeds into the common archive;
+red performs fresh target reads and uses the shared publication bucket. Server rate headers
 and `Retry-After` constrain subsequent requests across processes using that
 ledger. Account registration separately uses conservative 13-second auth pacing.
 Scripts outside this pacer still consume the same organiser quota and must be

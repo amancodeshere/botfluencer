@@ -14,8 +14,12 @@ The narrow executor, durable 48-hour mandate, independent target reservations,
 one-contact-per-author/24h limit, immutable configuration, private session checks,
 curated policy, and loopback systemd template are implemented. Static checks pass;
 the complete dedicated-Postgres suite and gaming-pc deployment verification are
-in progress. Operational results will be recorded after verification. No score or
-persuasion result is inferred from test data or account registration.
+in progress. Five new red integration tests passed, including archive discovery.
+Migration 0005 was applied additively to the application database. A finite
+single-tick canary recorded one matching accepted reply through the real API.
+Discovery uses the blue collector archive because the latest-feed window was
+crowded by competitor traffic; target author/thread are re-read before publication.
+No score or persuasion result is inferred from execution receipts.
 
 ## Current baseline — 23 October 2026
 

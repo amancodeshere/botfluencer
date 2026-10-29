@@ -5,12 +5,20 @@ from datetime import datetime, timedelta
 from typing import cast
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import String, exists, func, select
+from sqlalchemy import cast as sql_cast
 from sqlalchemy.dialects.postgresql import insert
 
-from botfluencer.domain import ActionIntent, Draft
+from botfluencer.domain import ActionIntent, Draft, ObservationInput
 from botfluencer.red.config import RedSettings
-from botfluencer.storage.models import Action, Decision, NPCPost, RedCampaign, RedTarget
+from botfluencer.storage.models import (
+    Action,
+    Decision,
+    NPCPost,
+    Observation,
+    RedCampaign,
+    RedTarget,
+)
 from botfluencer.storage.repository import Repository
 
 STRATEGY_VERSION = "npc-top-level-reply-v1"
@@ -69,6 +77,54 @@ class RedStore(Repository):
 
     def key(self, external_id: str) -> str:
         return hashlib.sha256(f"{self.scope}:{self.namespace}:{external_id}".encode()).hexdigest()
+
+    async def candidates(self, npc_ids: frozenset[int]) -> list[ObservationInput]:
+        """Discover archived IDs outside the player-flooded public feed window.
+
+        The archive does not store thread roots. Leave those fields absent here;
+        the executor must retrieve and verify the current post before any write.
+        """
+        async with self.db.sessions() as session:
+            observed = exists().where(
+                Observation.namespace == self.namespace,
+                Observation.external_id == sql_cast(NPCPost.post_id, String),
+            )
+            contacted = exists().where(
+                RedTarget.scope == self.scope,
+                RedTarget.author_id == NPCPost.author_id,
+                RedTarget.created_at > func.now() - timedelta(hours=24),
+            )
+            rows = await session.scalars(
+                select(NPCPost)
+                .where(
+                    NPCPost.namespace == self.config.archive_namespace,
+                    NPCPost.author_id.in_(npc_ids),
+                    NPCPost.kind == "post",
+                    NPCPost.post.is_not(None),
+                    func.length(func.btrim(NPCPost.post, " \t\r\n")) > 0,
+                    NPCPost.time_stamp >= func.now() - timedelta(hours=4),
+                    NPCPost.time_stamp <= func.now(),
+                    ~observed,
+                    ~contacted,
+                )
+                .order_by(NPCPost.time_stamp.desc(), NPCPost.post_id.desc())
+                .limit(8)
+            )
+            return [
+                ObservationInput(
+                    external_id=str(row.post_id),
+                    text=row.post,
+                    source="social",
+                    metadata={
+                        "post_id": row.post_id,
+                        "author_id": row.author_id,
+                        "kind": row.kind,
+                        "created_at": row.time_stamp.isoformat(),
+                    },
+                )
+                for row in rows
+                if row.post and row.post.strip()
+            ]
 
     async def skip(self, observation_id: UUID, external_id: str, reason: str) -> None:
         async with self.db.sessions.begin() as session:

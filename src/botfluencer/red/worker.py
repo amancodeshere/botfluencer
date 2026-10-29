@@ -4,7 +4,6 @@ import asyncio
 import hashlib
 import time
 
-from botfluencer.competition.errors import RequestDeferred
 from botfluencer.domain import ObservationInput
 from botfluencer.llm.mock import MockGenerator
 from botfluencer.red.config import RedSettings
@@ -37,11 +36,7 @@ class RedWorker(Worker):
         now = self.executor.transport.clock()
         active = self.config.starts_at <= now < self.config.ends_at
         if not self.state.paused and active:
-            if time.monotonic() >= self.next_observation_at:
-                try:
-                    await self.store.observe(await self.executor.observe())
-                except RequestDeferred as error:
-                    self.next_observation_at = time.monotonic() + error.seconds
+            await self.store.observe(await self.store.candidates(self.executor.npc_author_ids))
             for _ in range(8):
                 observation = await self.store.unplanned(
                     DISPATCHER, STRATEGY_VERSION, PROMPT_VERSION

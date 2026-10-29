@@ -186,3 +186,58 @@ async def test_claim_respects_pause_deadline_and_total_attempt_cap(repo: Reposit
             == 2
         )
     assert (await store.summary())["action_attempts_last_hour"] == 1
+
+
+@pytest.mark.integration
+async def test_archive_discovery_excludes_ineligible_observed_and_contacted_posts(
+    repo: Repository,
+) -> None:
+    from botfluencer.storage.npc_posts import PostArchive, PostRecord
+
+    store = await initialized_store(repo)
+    assert await plan(store, 123, 7)
+    await store.observe([observation(6, author_id=8)])
+    now = datetime.now(UTC)
+
+    def post(
+        identity: int,
+        author: int = 8,
+        *,
+        age: int = 0,
+        kind: str = "post",
+        body: str | None = "Synthetic referendum discussion",
+    ) -> PostRecord:
+        return PostRecord(
+            post_id=identity,
+            author_id=author,
+            user_name=None,
+            name=None,
+            post=body,
+            time_stamp=now - timedelta(hours=age),
+            kind=kind,
+            npc_status="unverified",
+        )
+
+    archive = PostArchive(repo.db, store.config.archive_namespace)
+    await archive.save(
+        [
+            post(1, 7),  # Another post from a contacted author.
+            post(2),  # Eligible known NPC; classification is author-level.
+            post(3, age=5),
+            post(4, 99),
+            post(5, kind="reply"),
+            post(6),  # Already observed in this campaign namespace.
+            post(7, body=""),
+            post(8, body=None),
+            post(9, body="  "),
+        ]
+    )
+    items = await store.candidates(frozenset({7, 8}))
+    assert [item.external_id for item in items] == ["2"]
+    assert items[0].source == "social"
+    assert items[0].metadata["author_id"] == 8
+    assert "root_post_id" not in items[0].metadata
+    assert "reply_to_post_id" not in items[0].metadata
+    assert await store.candidates(frozenset()) == []
+    await store.observe(items)
+    assert await store.candidates(frozenset({7, 8})) == []
