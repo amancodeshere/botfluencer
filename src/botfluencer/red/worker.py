@@ -36,6 +36,11 @@ class RedWorker(Worker):
                 raise ValueError("Reviewed NPC source archive is empty")
             if self.executor.transport.clock() < self.config.ends_at:
                 await self.executor.verify_sessions()
+                event(
+                    "red_sessions_verified",
+                    accounts=len(self.executor.sessions),
+                    npc_authors=len(self.executor.npc_author_ids),
+                )
         try:
             await super().run(ticks)
         finally:

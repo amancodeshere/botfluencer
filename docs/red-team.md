@@ -56,7 +56,8 @@ startup still rejects unreviewed configuration replacement.
 
 Additional private settings: `RED_WORLD_CONTEXT_FILE`, `RED_MAX_WORLD_AGE_HOURS`
 (6), `RED_IDENTITY_TIMEOUT_SECONDS` (600), `RED_MAX_PENDING_ACTIONS` (4), and
-`RED_POST_INTERVAL_SECONDS` (300). The expanded configuration uses hourly attempt
+`RED_POST_INTERVAL_SECONDS` (300 by default, 60 in the expanded deployment).
+The expanded configuration uses hourly attempt
 ceilings of 180 for publications and model calls, a total cap of 8640, a two-second
 dispatch polling target, 90-second operations and 130-second heartbeat tolerance.
 These ceilings are not throughput promises; server headers and actual latency
@@ -133,7 +134,7 @@ does not read the blue service's private environment file.
 | `BOT_ACCOUNT_COOLDOWN_SECONDS` | 5 by default |
 | `BOT_MAX_ACTION_ATTEMPTS` | 3 by default; only proven safe deferrals can be retried |
 | `BOT_POLL_INTERVAL_SECONDS` | 5 by default; 30 is a conservative workstation setting sharing feed quota with blue |
-| `BOT_OPERATION_TIMEOUT_SECONDS` | 30 by default; use 60 with the service's 70-second stop grace |
+| `BOT_OPERATION_TIMEOUT_SECONDS` | 30 by default; deployed at 90 with the service's 120-second stop grace |
 | `BOT_HEARTBEAT_TIMEOUT_SECONDS` | 60 by default; use 120 when polling is 30 and operation timeout is 60 |
 | `BOT_BIND_HOST` / `PORT` | Set `127.0.0.1` / `8001`; defaults are `0.0.0.0` / `8000` |
 
@@ -181,7 +182,7 @@ botfluencer-workstation --env-file /home/aman/.config/botfluencer/red.env \
 The user-service template is
 [`deployment/systemd/botfluencer-red.service`](../deployment/systemd/botfluencer-red.service).
 It uses the installed launcher, private environment, a five-second restart
-delay, a restart limit, SIGTERM draining, and a 70-second stop timeout. Install
+delay, a restart limit, SIGTERM draining, and a 120-second stop timeout. Install
 it under `~/.config/systemd/user/` for the Ubuntu user `aman`. This template alone
 does not prove deployment or health.
 
