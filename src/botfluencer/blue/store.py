@@ -8,8 +8,16 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import aliased
 
 from botfluencer.blue.config import BlueSettings
+from botfluencer.blue.data import text_key
 from botfluencer.storage.database import Database
-from botfluencer.storage.models import BlueReport, BlueScore, BlueState, BlueTeamControl, NPCPost
+from botfluencer.storage.models import (
+    BlueReport,
+    BlueReportAttempt,
+    BlueScore,
+    BlueState,
+    BlueTeamControl,
+    NPCPost,
+)
 
 
 class BlueStore:
@@ -37,6 +45,7 @@ class BlueStore:
                     "cursor",
                     "anchor",
                     "next_anchor",
+                    "seen_cursors",
                     "heartbeat_at",
                     "model_version",
                     "last_event",
@@ -125,7 +134,11 @@ class BlueStore:
                             author_id=p["author_id"],
                             model_version=version,
                             probability=score,
-                            evidence={"policy": "blue-v1", "threshold": threshold},
+                            evidence={
+                                "policy": "blue-v2-distinct-text",
+                                "threshold": threshold,
+                                "text_hash": text_key(p["text"]),
+                            },
                         )
                         for p, score in zip(posts, probabilities, strict=True)
                     ]
@@ -134,7 +147,10 @@ class BlueStore:
             )
             hit_rows = (
                 await session.execute(
-                    select(BlueScore.author_id, func.count())
+                    select(
+                        BlueScore.author_id,
+                        func.count(func.distinct(BlueScore.evidence["text_hash"].astext)),
+                    )
                     .where(
                         BlueScore.namespace == self.namespace,
                         BlueScore.model_version == version,
@@ -162,7 +178,7 @@ class BlueStore:
                             detail=(
                                 "I think that this content is inauthentic (bot) activity because "
                                 f"our versioned competitor/NPC classifier scored it {score:.3f}, "
-                                f"with {count} high-scoring posts from this author "
+                                f"with {count} distinct high-scoring texts from this author "
                                 "in the observation window. "
                                 "This is statistical evidence, not proof of origin."
                             ),
@@ -199,7 +215,8 @@ class BlueStore:
             )
             control = await session.get(BlueTeamControl, self.scope, with_for_update=True)
             assert control is not None
-            now = datetime.now(UTC)
+            now = await session.scalar(select(func.clock_timestamp()))
+            assert isinstance(now, datetime)
             if control.blocked_until and control.blocked_until > now:
                 return None
             state = await session.get(BlueState, self.namespace)
@@ -216,10 +233,10 @@ class BlueStore:
             )
             hourly = await session.scalar(
                 select(func.count())
-                .select_from(BlueReport)
+                .select_from(BlueReportAttempt)
                 .where(
-                    BlueReport.scope == self.scope,
-                    BlueReport.attempted_at >= now - timedelta(hours=1),
+                    BlueReportAttempt.scope == self.scope,
+                    BlueReportAttempt.created_at >= now - timedelta(hours=1),
                 )
             )
             if (pending or 0) >= self.config.max_pending_reports or (
@@ -252,11 +269,55 @@ class BlueStore:
             if report is None:
                 return None
             report.status, report.attempted_at = "in_flight", now
+            session.add(
+                BlueReportAttempt(
+                    scope=self.scope, namespace=self.namespace, post_id=report.post_id
+                )
+            )
             return {
                 "post_id": report.post_id,
+                "author_id": report.author_id,
                 "detail": report.detail,
                 "correlation_id": str(report.correlation_id),
             }
+
+    async def candidates(
+        self, limit: int = 20, *, include_excerpt: bool = False
+    ) -> list[dict[str, Any]]:
+        """Bounded operator review; source excerpts require explicit opt-in."""
+        if type(limit) is not int or not 1 <= limit <= 100:
+            raise ValueError("Candidate limit must be an integer from 1 to 100")
+        async with self.database.sessions() as session:
+            rows = (
+                await session.execute(
+                    select(BlueReport, NPCPost.post)
+                    .outerjoin(
+                        NPCPost,
+                        (NPCPost.namespace == BlueReport.namespace)
+                        & (NPCPost.post_id == BlueReport.post_id),
+                    )
+                    .where(BlueReport.scope == self.scope)
+                    .order_by(BlueReport.created_at.desc(), BlueReport.post_id.desc())
+                    .limit(limit)
+                )
+            ).all()
+            result = []
+            for report, body in rows:
+                item = {
+                    "post_id": report.post_id,
+                    "author_id": report.author_id,
+                    "model_version": report.model_version,
+                    "probability": report.probability,
+                    "status": report.status,
+                    "outcome": report.outcome,
+                    "created_at": report.created_at.isoformat(),
+                    "correlation_id": str(report.correlation_id),
+                }
+                if include_excerpt:
+                    item["excerpt"] = body[:500] if isinstance(body, str) else None
+                    item["evidence_detail"] = report.detail
+                result.append(item)
+            return result
 
     async def finish(self, post_id: int, status: str, *, block: bool = False) -> None:
         if status not in {"approved", "accepted", "unknown", "rejected"}:
@@ -302,6 +363,19 @@ class BlueStore:
             ).all()
             counts = {row[0]: row[1] for row in count_rows}
             control = await session.get(BlueTeamControl, self.scope)
+            score_count = await session.scalar(
+                select(func.count())
+                .select_from(BlueScore)
+                .where(BlueScore.namespace == self.namespace)
+            )
+            attempts = await session.scalar(
+                select(func.count())
+                .select_from(BlueReportAttempt)
+                .where(
+                    BlueReportAttempt.scope == self.scope,
+                    BlueReportAttempt.created_at >= func.now() - timedelta(hours=1),
+                )
+            )
         state = await self.state()
         heartbeat = state["heartbeat_at"]
         return {
@@ -314,6 +388,9 @@ class BlueStore:
             else None,
             "catchup_pending": state["cursor"] is not None,
             "reports": counts,
+            "score_count": score_count or 0,
+            "candidate_review_count": counts.get("review", 0),
+            "report_attempts_last_hour": attempts or 0,
             "blocked_until": str(control.blocked_until)
             if control and control.blocked_until
             else None,

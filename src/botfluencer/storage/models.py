@@ -163,6 +163,25 @@ class BlueState(Base):
     heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     model_version: Mapped[str | None] = mapped_column(String(64))
     last_event: Mapped[str | None] = mapped_column(String(64))
+    seen_cursors: Mapped[list[str]] = mapped_column(JSONB, default=list, server_default="[]")
+
+
+class BlueReportAttempt(Base):
+    __tablename__ = "blue_report_attempts"
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    scope: Mapped[str] = mapped_column(String(64))
+    post_id: Mapped[int] = mapped_column(BigInteger)
+    namespace: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class RedAccountControl(Base):
+    __tablename__ = "red_account_controls"
+    scope: Mapped[str] = mapped_column(String(64), primary_key=True)
+    account: Mapped[str] = mapped_column(String(64), primary_key=True)
+    disabled: Mapped[bool] = mapped_column(default=True, server_default="true")
+    reason: Mapped[str] = mapped_column(String(128))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class BlueScore(Base):

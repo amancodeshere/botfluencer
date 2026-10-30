@@ -33,3 +33,21 @@ async def amend(settings: Settings, config: RedSettings, reason: str) -> dict[st
     finally:
         await transport.close()
         await database.close()
+
+
+async def account_control(
+    settings: Settings, config: RedSettings, account: str | None = None, reason: str | None = None
+) -> dict[str, object]:
+    database = Database(settings)
+    store = RedStore(database)
+    store.config, store.scope = config, TeamPacer(database).scope
+    try:
+        if account is not None:
+            await store.quarantine(account, reason or "operator_disabled")
+        return {
+            "configured_accounts": len(settings.accounts),
+            "eligible_accounts": await store.active_accounts(),
+            "disabled_accounts": sorted(await store.disabled_accounts()),
+        }
+    finally:
+        await database.close()

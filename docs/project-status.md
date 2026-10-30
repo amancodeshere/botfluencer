@@ -1,5 +1,29 @@
 # Project status
 
+## Blue operational delivery — 30 October 2026
+
+The user requested deployment of the planned blue initiative and investigation
+of two reported red bans. An authenticated read audit found all 49 controlled
+sessions returning HTTP 200 and no rejected publishing actions at audit time;
+the reported banned identities remain unidentified. No account replacement or
+ban bypass was attempted. Durable per-account quarantine now prevents a rejected
+session from stopping healthy workers or repeatedly claiming queued work, while
+preserving the historical roster, unknown outcomes and own-account exclusions.
+
+Blue previously collected only: there was no useful release or reporting session.
+Private exports now contain 3,111 known NPC examples and 432 actual own published
+posts, deduplicating to 75 positive texts. These are controlled-origin shadow
+training data, not an independent competitor holdout. Fresh GPU training and
+shadow activation are in progress; automatic reports remain disabled.
+
+Implementation includes authenticated reporter identity checks, conservative 408
+ambiguity, backend ownership checks, durable per-attempt report budgets,
+cross-restart cursor-cycle detection, distinct-text corroboration, private review
+candidates and sealed real-validation provenance. Local static checks and 263
+unit cases pass; the existing blue Postgres group and new quarantine recovery
+integration passed against the disposable database. Operational results follow
+after workstation verification.
+
 ## Red campaign implementation — 30 October 2026
 
 The subsequent authorized expansion registered 45 additional accounts: 49

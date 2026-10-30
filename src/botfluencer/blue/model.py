@@ -8,6 +8,47 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from botfluencer.blue.validation import RealValidation
+
+
+def real_validation_validated(root: Path, manifest: "Manifest") -> bool:
+    """Legacy, malformed, unsealed, or synthetic evaluations fail closed."""
+    try:
+        report_path = root / "real-validation.json"
+        if report_path.stat().st_size > 65536:
+            return False
+        report = RealValidation.model_validate_json(report_path.read_text())
+        expected = manifest.files.get("training-provenance.json")
+        if expected is None:
+            return False
+        with (root / "training-provenance.json").open("rb") as handle:
+            provenance_hash = hashlib.file_digest(handle, "sha256").hexdigest()
+        return (
+            report.model_version == manifest.version
+            and report.threshold == manifest.threshold
+            and report.training_provenance_sha256 == expected == provenance_hash
+            and report.permits_automatic_reporting()
+        )
+    except (OSError, ValueError, TypeError):
+        return False
+
+
+def inspect_release(root: Path) -> dict[str, Any]:
+    """Operator diagnostics without loading CUDA or exposing source data."""
+    if not (root / "manifest.json").exists():
+        return {"status": "missing", "automatic_reporting_validated": False}
+    try:
+        manifest = Manifest.model_validate_json((root / "manifest.json").read_text())
+        manifest.verify(root)
+    except (OSError, ValueError, TypeError):
+        return {"status": "invalid", "automatic_reporting_validated": False}
+    return {
+        "status": "verified",
+        "model_version": manifest.version,
+        "threshold": manifest.threshold,
+        "automatic_reporting_validated": real_validation_validated(root, manifest),
+    }
+
 
 class Manifest(BaseModel):
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
@@ -67,6 +108,7 @@ class Detector:
                 local_files_only=True,
                 trust_remote_code=False,
                 dtype=self.torch.float32,
+                use_safetensors=True,
             )
             .to("cuda")
             .eval()
@@ -93,17 +135,4 @@ class Detector:
         return probabilities
 
     def automatic_reporting_validated(self) -> bool:
-        path = self.root / "real-validation.json"
-        if not path.exists():
-            return False
-        data = json.loads(path.read_text())
-        # Synthetic evaluation never activates automatic reports.
-        return bool(
-            data.get("model_version") == self.manifest.version
-            and data.get("real_labels_only") is True
-            and data.get("author_disjoint") is True
-            and data.get("positive_count", 0) >= 100
-            and data.get("negative_count", 0) >= 400
-            and data.get("precision_lower_95", 0) >= 0.95
-            and data.get("fpr_upper_95", 1) <= 0.01
-        )
+        return real_validation_validated(self.root, self.manifest)

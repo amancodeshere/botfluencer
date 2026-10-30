@@ -7,15 +7,16 @@ import os
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import select, text
+from sqlalchemy import or_, select, text
 
 from botfluencer.competition.errors import RequestDeferred
 from botfluencer.competition.pacing import TeamPacer
 from botfluencer.competition.standards import LLM_MODEL
 from botfluencer.competition.transport import CompetitionTransport
 from botfluencer.config import Settings
+from botfluencer.domain import Draft
 from botfluencer.storage.database import Database
-from botfluencer.storage.models import NPCPost
+from botfluencer.storage.models import Action, NPCPost, Outcome, RedCampaign, RedCampaignRevision
 
 PROMPT = (
     "Create one short synthetic training example for the fictional Kingstonia competition. "
@@ -95,7 +96,11 @@ def prepare_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     by_text: dict[str, dict[str, Any]] = {}
     conflicts: set[str] = set()
     for row in rows:
-        if row.get("label") not in (0, 1) or not isinstance(row.get("group"), str):
+        if (
+            type(row.get("label")) is not int
+            or row.get("label") not in (0, 1)
+            or not isinstance(row.get("group"), str)
+        ):
             raise ValueError("Every example needs a binary origin label and a stable group")
         content = row.get("text")
         if not isinstance(content, str) or not content.strip() or len(content) > 500:
@@ -108,18 +113,88 @@ def prepare_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [value for key, value in by_text.items() if key not in conflicts]
 
 
+def own_published_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Normalize acknowledged own publications without calling them reviewed opponents."""
+    normalized = []
+    for row in rows:
+        author = row.get("author_id")
+        post_id = row.get("post_id")
+        if (
+            row.get("source") != "own_published_controlled"
+            or type(author) is not int
+            or author < 1
+            or type(post_id) is not int
+            or post_id < 1
+            or type(row.get("label")) is not int
+            or row["label"] != 1
+        ):
+            raise ValueError(
+                "Own examples require controlled publication provenance and integer IDs"
+            )
+        group = f"author:{author}"
+        if row.get("group", group) != group:
+            raise ValueError("Own examples must group by actual author ID")
+        normalized.append(dict(row, group=group))
+    return prepare_rows(normalized)
+
+
+async def historical_own_author_ids(
+    database: Database, *, namespace: str | None = None
+) -> frozenset[int]:
+    """Include previous campaign members, including banned or removed accounts."""
+    configured = {
+        int(account)
+        for account in database.settings.accounts
+        if account.isascii() and account.isdecimal() and int(account) > 0
+    }
+    code = database.settings.ctn_team_code
+    scope = (
+        "ctn-" + hashlib.sha256(code.get_secret_value().encode()).hexdigest()[:48]
+        if code is not None
+        else None
+    )
+    async with database.sessions() as session:
+        criterion = or_(RedCampaign.namespace.in_({database.settings.namespace, namespace or ""}))
+        if scope is not None:
+            criterion = or_(criterion, RedCampaign.scope == scope)
+        campaigns = list(await session.scalars(select(RedCampaign).where(criterion)))
+        scopes = {campaign.scope for campaign in campaigns}
+        if scope is not None:
+            scopes.add(scope)
+        revisions = list(
+            await session.scalars(
+                select(RedCampaignRevision).where(RedCampaignRevision.scope.in_(scopes))
+            )
+        )
+    account_lists = [campaign.accounts for campaign in campaigns]
+    account_lists.extend(revision.previous_accounts for revision in revisions)
+    account_lists.extend(revision.accounts for revision in revisions)
+    for accounts in account_lists:
+        for account in accounts:
+            if isinstance(account, str) and account.isascii() and account.isdecimal():
+                if int(account) > 0:
+                    configured.add(int(account))
+    return frozenset(configured)
+
+
 async def export_npcs(
     settings: Settings, root: Path, namespace: str = "ctn-2026"
 ) -> dict[str, int]:
     root = private_directory(root)
     database = Database(settings)
     try:
+        own_ids = await historical_own_author_ids(database)
         async with database.sessions() as session:
+            conflicting = select(NPCPost.author_id).where(
+                NPCPost.namespace == namespace, NPCPost.npc_status == "player"
+            )
             posts = await session.scalars(
                 select(NPCPost)
                 .where(
                     NPCPost.namespace == namespace,
                     NPCPost.npc_status == "npc",
+                    NPCPost.author_id.not_in(conflicting),
+                    NPCPost.author_id.not_in(own_ids),
                     NPCPost.post.is_not(None),
                     NPCPost.post != "",
                 )
@@ -138,7 +213,97 @@ async def export_npcs(
             ]
         rows = prepare_rows(rows)
         await asyncio.to_thread(save_jsonl, root / "npc.jsonl", rows)
+        await asyncio.to_thread(
+            write_json, root / "own-authors.json", {"own_author_ids": sorted(own_ids)}
+        )
         return {"npc_examples": len(rows), "npc_authors": len({r["group"] for r in rows})}
+    finally:
+        await database.close()
+
+
+async def export_own_posts(
+    settings: Settings, root: Path, namespace: str = "red-20261030"
+) -> dict[str, int]:
+    """Export only durable accepted publications; no network or moderation calls."""
+    root = private_directory(root)
+    database = Database(settings)
+    try:
+        own_ids = await historical_own_author_ids(database, namespace=namespace)
+        async with database.sessions() as session:
+            records = (
+                await session.execute(
+                    select(Action, Outcome)
+                    .join(Outcome, Outcome.action_id == Action.id)
+                    .where(
+                        Action.namespace == namespace,
+                        Action.status == "succeeded",
+                        Outcome.kind == "accepted",
+                    )
+                    .order_by(Outcome.created_at, Outcome.id)
+                )
+            ).all()
+        rows = []
+        seen: dict[int, tuple[int, str]] = {}
+        rejected = 0
+        for action, outcome in records:
+            account, external_id = action.account, outcome.payload.get("external_id")
+            if (
+                not isinstance(account, str)
+                or not account.isascii()
+                or not account.isdecimal()
+                or int(account) < 1
+                or not isinstance(external_id, str)
+                or not external_id.isascii()
+                or not external_id.isdecimal()
+                or int(external_id) < 1
+                or str(int(external_id)) != external_id
+                or outcome.payload.get("details", {}).get("synthetic") is True
+            ):
+                rejected += 1
+                continue
+            try:
+                draft = Draft.model_validate(action.payload)
+            except ValueError:
+                raise ValueError("Accepted publication has an invalid durable draft") from None
+            author_id, post_id = int(account), int(external_id)
+            if author_id not in own_ids:
+                raise ValueError(
+                    "Published author is absent from the team's historical account set"
+                )
+            identity = (author_id, draft.text)
+            if post_id in seen:
+                if seen[post_id] != identity:
+                    raise ValueError("Accepted publication identifiers have conflicting provenance")
+                continue
+            seen[post_id] = identity
+            rows.append(
+                dict(
+                    id=f"own_published:{post_id}",
+                    post_id=post_id,
+                    author_id=author_id,
+                    group=f"author:{author_id}",
+                    label=1,
+                    text=draft.text,
+                    source="own_published_controlled",
+                    namespace=namespace,
+                    action_id=str(action.id),
+                    published_at=outcome.created_at.isoformat(),
+                    kind=draft.kind,
+                )
+            )
+        # Preserve the raw acknowledged publication count in the export; training
+        # performs text deduplication separately and reports its smaller population.
+        await asyncio.to_thread(save_jsonl, root / "own-published.jsonl", rows)
+        await asyncio.to_thread(
+            write_json, root / "own-authors.json", {"own_author_ids": sorted(own_ids)}
+        )
+        normalized = own_published_rows(rows)
+        return {
+            "own_published_posts": len(rows),
+            "own_published_unique_texts": len(normalized),
+            "own_published_authors": len({r["author_id"] for r in rows}),
+            "rejected_nonpublication_records": rejected,
+        }
     finally:
         await database.close()
 

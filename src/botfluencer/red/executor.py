@@ -7,7 +7,7 @@ guarantee: an unacknowledged write remains unknown and must never be retried.
 
 import asyncio
 import re
-from collections.abc import Mapping
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
@@ -48,6 +48,8 @@ class ReplyExecutor:
         ends_at: datetime,
         enabled: bool = False,
         allow_threads: bool = False,
+        disabled_accounts: set[str] | None = None,
+        quarantine: Callable[[str, str], Awaitable[None]] | None = None,
     ) -> None:
         if ends_at.utcoffset() is None:
             raise ValueError("Reply execution deadline requires an explicit timezone")
@@ -55,6 +57,8 @@ class ReplyExecutor:
         self.sessions = dict(sessions)
         self.enabled = enabled
         self.allow_threads = allow_threads
+        self.disabled_accounts = set(disabled_accounts or ())
+        self.quarantine = quarantine
         self.expected_team_id = _positive_id(expected_team_id)
         self.ends_at = ends_at
         self.npc_author_ids = frozenset(_positive_id(value) for value in npc_author_ids)
@@ -114,6 +118,15 @@ class ReplyExecutor:
         self._verified_accounts.clear()
         verified: set[str] = set()
         for account, session in self.sessions.items():
+            if account in self.disabled_accounts:
+                continue
+            if (
+                session.expires_at is not None
+                and self.transport.clock() >= session.expires_at
+                and self.quarantine is not None
+            ):
+                await self._disable(account, "session_expired")
+                continue
             self._require_session_active(session)
             # All of this is before publication. Wait through durable read pacing
             # so several sessions can be verified together without restart livelock.
@@ -138,6 +151,9 @@ class ReplyExecutor:
             if response.status_code == 429:
                 raise RequestDeferred(delay)
             if not 200 <= response.status_code < 300:
+                if response.status_code in (401, 403) and self.quarantine is not None:
+                    await self._disable(account, "authentication_rejected")
+                    continue
                 raise CompetitionHTTPError(response.status_code)
             data: Any = response.json()
             if (
@@ -150,6 +166,12 @@ class ReplyExecutor:
                 raise ValueError("Account session does not match the configured account and team")
             verified.add(account)
         self._verified_accounts = verified
+
+    async def _disable(self, account: str, reason: str) -> None:
+        self.disabled_accounts.add(account)
+        self._verified_accounts.discard(account)
+        if self.quarantine is not None:
+            await self.quarantine(account, reason)
 
     async def observe(self) -> list[ObservationInput]:
         return await self._reader.observe()
@@ -237,7 +259,11 @@ class ReplyExecutor:
     async def execute(self, intent: ActionIntent) -> Receipt:
         self._require_enabled()
         session = self.sessions.get(intent.account)
-        if session is None or intent.account not in self._verified_accounts:
+        if (
+            session is None
+            or intent.account in self.disabled_accounts
+            or intent.account not in self._verified_accounts
+        ):
             raise PermanentRejection("Account session has not been verified")
         self._require_session_active(session)
         if intent.draft.kind not in {"reply", "post"} or not intent.draft.text.strip():
@@ -300,6 +326,8 @@ class ReplyExecutor:
         if response.status_code == 429:
             raise SafeRetry(delay)
         if 400 <= response.status_code < 500 and response.status_code != 408:
+            if response.status_code in (401, 403) and self.quarantine is not None:
+                await self._disable(intent.account, "authentication_rejected")
             raise PermanentRejection("Competition rejected the publication")
         if not 200 <= response.status_code < 300:
             raise CompetitionHTTPError(response.status_code)

@@ -16,6 +16,8 @@ from botfluencer.storage.models import (
     Decision,
     NPCPost,
     Observation,
+    Outcome,
+    RedAccountControl,
     RedCampaign,
     RedCampaignRevision,
     RedTarget,
@@ -31,6 +33,57 @@ DISPATCHER = "red-dispatcher"
 class RedStore(Repository):
     config: RedSettings
     scope: str
+
+    async def disabled_accounts(self) -> set[str]:
+        async with self.db.sessions() as session:
+            return set(
+                await session.scalars(
+                    select(RedAccountControl.account).where(
+                        RedAccountControl.scope == self.scope, RedAccountControl.disabled.is_(True)
+                    )
+                )
+            )
+
+    async def active_accounts(self) -> list[str]:
+        disabled = await self.disabled_accounts()
+        return [account for account in self.settings.accounts if account not in disabled]
+
+    async def quarantine(self, account: str, reason: str) -> None:
+        if account not in self.settings.accounts or reason not in {
+            "authentication_rejected",
+            "session_expired",
+            "operator_disabled",
+            "server_banned",
+        }:
+            raise ValueError("Use a configured account and a sanitized eligibility reason")
+        async with self.db.sessions.begin() as session:
+            await session.execute(
+                insert(RedAccountControl)
+                .values(scope=self.scope, account=account, disabled=True, reason=reason)
+                .on_conflict_do_update(
+                    index_elements=["scope", "account"],
+                    set_={"disabled": True, "reason": reason, "updated_at": func.now()},
+                )
+            )
+            queued = await session.scalars(
+                select(Action)
+                .where(
+                    Action.namespace == self.namespace,
+                    Action.account == account,
+                    Action.status == "queued",
+                )
+                .with_for_update()
+            )
+            for action in queued:
+                action.status = "failed"
+                session.add(
+                    Outcome(
+                        action_id=action.id,
+                        attempt=action.attempts,
+                        kind="account_disabled",
+                        payload={"reason": reason},
+                    )
+                )
 
     async def amend(self, reason: str) -> dict[str, int]:
         if not reason.strip() or len(reason) > 500:
@@ -80,6 +133,9 @@ class RedStore(Repository):
             return {"accounts": len(accounts), "max_attempts": campaign.max_attempts}
 
     async def next_account(self) -> str:
+        accounts = await self.active_accounts()
+        if not accounts:
+            raise RuntimeError("No eligible publishing accounts remain")
         async with self.db.sessions() as session:
             rows = await session.execute(
                 select(UsageEvent.account, func.max(UsageEvent.created_at))
@@ -94,9 +150,7 @@ class RedStore(Repository):
             )
             for account, stamp in reserved.all():
                 used[account] = max(used.get(account, self.config.starts_at), stamp)
-            return min(
-                self.settings.accounts, key=lambda a: (used.get(a, self.config.starts_at), a)
-            )
+            return min(accounts, key=lambda a: (used.get(a, self.config.starts_at), a))
 
     async def original_due(self) -> bool:
         async with self.db.sessions() as session:
@@ -346,6 +400,11 @@ class RedStore(Repository):
             return True
 
     async def claim(self, allowed_accounts: list[str] | None = None) -> ActionIntent | None:
+        eligible = await self.active_accounts()
+        if allowed_accounts is not None:
+            eligible = [account for account in eligible if account in allowed_accounts]
+        if not eligible:
+            return None
         async with self.db.sessions.begin() as session:
             campaign = await session.scalar(
                 select(RedCampaign).where(RedCampaign.scope == self.scope).with_for_update()
@@ -355,7 +414,7 @@ class RedStore(Repository):
                 return None
             if await self._used_total() >= campaign.max_attempts:
                 return None
-            return await super().claim(allowed_accounts)
+            return await super().claim(eligible)
 
     async def has_pending(self) -> bool:
         async with self.db.sessions() as session:

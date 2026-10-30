@@ -88,10 +88,20 @@ def test_notebooks_have_no_outputs_and_valid_python() -> None:
 @pytest.mark.parametrize("failure", ["timeout", "invalid_ack", "success", "throttle", "forbidden"])
 async def test_report_wire_contract_and_ambiguity(failure: str) -> None:
     config = BlueSettings(
-        enable_reports=True, own_author_ids=[10], session_token="test-account-token"
+        enable_reports=True,
+        own_author_ids=[10],
+        session_token="test-account-token",
+        reporter_account_id=10,
+        expected_team_id=99,
     )
 
     async def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/api/auth/me":
+            assert request.method == "GET"
+            assert request.headers["Authorization"] == "Bearer test-account-token"
+            return httpx.Response(
+                200, json={"account": {"account_id": 10}, "team": {"team_id": 99}}
+            )
         assert str(request.url) == "https://social.legitreal.com/api/posts/7/report"
         assert request.headers["Authorization"] == "Bearer test-account-token"
         assert json.loads(request.content) == {
@@ -122,7 +132,13 @@ async def test_report_wire_contract_and_ambiguity(failure: str) -> None:
 
             @asynccontextmanager
             async def owner():
-                yield SimpleNamespace(execute=AsyncMock())
+                yield SimpleNamespace(
+                    execute=AsyncMock(),
+                    scalar=AsyncMock(return_value=101),
+                    commit=AsyncMock(),
+                    closed=False,
+                    invalidated=False,
+                )
 
             return owner()
 
@@ -165,7 +181,12 @@ async def test_report_wire_contract_and_ambiguity(failure: str) -> None:
 async def test_auto_reporting_requires_real_evaluation() -> None:
     reporter = Reporter(
         BlueSettings(
-            enable_reports=True, auto_report=True, own_author_ids=[1], session_token="test"
+            enable_reports=True,
+            auto_report=True,
+            own_author_ids=[1],
+            session_token="test",
+            reporter_account_id=1,
+            expected_team_id=99,
         ),
         SimpleNamespace(settings=SimpleNamespace(ctn_network_enabled=True)),
         None,
@@ -188,7 +209,7 @@ async def test_blue_recovery_pause_budgets_and_npc_exclusion(repo: Repository) -
             author_id=author,
             user_name=None,
             name=None,
-            post="Synthetic fixture",
+            post=f"Synthetic fixture observation {identity}",
             time_stamp=datetime.now(UTC),
             kind="post",
             npc_status="npc" if npc else "unverified",
@@ -264,7 +285,13 @@ async def test_training_pause_keeps_collecting_without_loading_model(monkeypatch
 
     @asynccontextmanager
     async def leadership(_scope):
-        yield SimpleNamespace(execute=AsyncMock(), commit=AsyncMock())
+        yield SimpleNamespace(
+            execute=AsyncMock(),
+            commit=AsyncMock(),
+            scalar=AsyncMock(return_value=101),
+            closed=False,
+            invalidated=False,
+        )
 
     database = SimpleNamespace(leadership=leadership, close=AsyncMock())
     store = SimpleNamespace(

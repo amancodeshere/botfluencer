@@ -5,10 +5,12 @@ import importlib
 import json
 import math
 import random
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
 from botfluencer.blue.data import (
+    own_published_rows,
     prepare_rows,
     private_directory,
     read_jsonl,
@@ -17,6 +19,7 @@ from botfluencer.blue.data import (
     write_json,
 )
 from botfluencer.blue.model import Detector, Manifest
+from botfluencer.blue.validation import RealValidation
 
 
 def wilson(successes: int, total: int) -> tuple[float, float]:
@@ -59,6 +62,51 @@ def select_threshold(labels: list[int], scores: list[float]) -> float:
     return max(eligible, key=lambda pair: (pair[1]["recall"], pair[0]))[0] if eligible else 1.0
 
 
+def training_rows(root: Path) -> list[dict[str, Any]]:
+    """Read each provenance class through its own normalization boundary."""
+    return prepare_rows(
+        read_jsonl(root / "npc.jsonl")
+        + read_jsonl(root / "synthetic.jsonl")
+        + reviewed_rows(read_jsonl(root / "reviewed-training.jsonl"))
+        + own_published_rows(read_jsonl(root / "own-published.jsonl"))
+    )
+
+
+def training_data_summary(root: Path) -> dict[str, Any]:
+    """Cheap preflight before importing ML packages or reserving the GPU."""
+    rows = training_rows(private_directory(root))
+    counts = {
+        split: {
+            str(label): sum(row["split"] == split and row["label"] == label for row in rows)
+            for label in (0, 1)
+        }
+        for split in ("train", "validation", "test")
+    }
+    sources = dict(Counter(row["source"] for row in rows if row["label"] == 1))
+    return {
+        "deduplicated_examples": len(rows),
+        "split_class_counts": counts,
+        "positive_source_counts": sources,
+        "own_heldout_diagnostic": "own_published_controlled" in sources,
+        "automatic_reporting_validated": False,
+        "minimum_examples_per_class_per_split": 5,
+        "ready": all(count >= 5 for split in counts.values() for count in split.values()),
+    }
+
+
+def _own_authors(root: Path, rows: list[dict[str, Any]]) -> list[int]:
+    path = root / "own-authors.json"
+    authors = json.loads(path.read_text())["own_author_ids"] if path.exists() else []
+    if not isinstance(authors, list) or any(
+        type(author) is not int or author < 1 for author in authors
+    ):
+        raise ValueError("Historical own-author provenance must contain positive integer IDs")
+    return sorted(
+        set(authors)
+        | {row["author_id"] for row in rows if row.get("source") == "own_published_controlled"}
+    )
+
+
 def train(root: Path, output: Path, *, epochs: int = 3, max_length: int = 256) -> dict[str, Any]:
     """Run manually on gaming-pc. FP32 weights, batch 2, gradient accumulation 4."""
     if not 1 <= epochs <= 10 or not 16 <= max_length <= 512:
@@ -66,11 +114,7 @@ def train(root: Path, output: Path, *, epochs: int = 3, max_length: int = 256) -
     root, output = private_directory(root), private_directory(output)
     if (output / "manifest.json").exists():
         raise ValueError("Use a new immutable output directory for every release")
-    rows = prepare_rows(
-        read_jsonl(root / "npc.jsonl")
-        + read_jsonl(root / "synthetic.jsonl")
-        + reviewed_rows(read_jsonl(root / "reviewed-training.jsonl"))
-    )
+    rows = training_rows(root)
     splits = {
         name: [r for r in rows if r["split"] == name] for name in ("train", "validation", "test")
     }
@@ -167,7 +211,9 @@ def train(root: Path, output: Path, *, epochs: int = 3, max_length: int = 256) -
     report = {
         "validation": metrics(val_labels, val_scores, threshold),
         "test": metrics([r["label"] for r in splits["test"]], test_scores, threshold),
-        "synthetic_positive_labels": True,
+        "synthetic_positive_labels": any(r.get("source") == "synthetic_qwen" for r in rows),
+        "positive_source_counts": dict(Counter(r["source"] for r in rows if r["label"] == 1)),
+        "own_heldout_diagnostic": any(r.get("source") == "own_published_controlled" for r in rows),
         "automatic_reporting_validated": False,
         "split_counts": {name: len(data) for name, data in splits.items()},
     }
@@ -192,6 +238,22 @@ def train(root: Path, output: Path, *, epochs: int = 3, max_length: int = 256) -
     )
     trainer.save_model(str(output))
     tokenizer.save_pretrained(output)
+    write_json(output / "evaluation.json", report)
+    write_json(
+        output / "training-provenance.json",
+        {
+            "schema_version": "blue-training-v2",
+            "used_groups": sorted({r["group"] for r in rows}),
+            "used_text_hashes": sorted({r["text_hash"] for r in rows}),
+            "dataset_hash": hashlib.sha256(json.dumps(rows, sort_keys=True).encode()).hexdigest(),
+            "own_author_ids": _own_authors(root, rows),
+            "positive_source_counts": report["positive_source_counts"],
+            "own_heldout_diagnostic": report["own_heldout_diagnostic"],
+            "automatic_reporting_validated": False,
+            "base_model": model_id,
+            "seed": 42,
+        },
+    )
     files = {}
     for path in sorted(output.iterdir()):
         if path.is_file() and path.suffix in {".json", ".safetensors", ".model"}:
@@ -207,42 +269,71 @@ def train(root: Path, output: Path, *, epochs: int = 3, max_length: int = 256) -
     )
     version = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
     manifest = Manifest(version=version, **identity)
-    write_json(output / "evaluation.json", report)
-    used = splits["train"] + splits["validation"]
-    write_json(
-        output / "training-provenance.json",
-        {
-            "used_groups": sorted({r["group"] for r in used}),
-            "used_text_hashes": sorted({r["text_hash"] for r in used}),
-            "dataset_hash": hashlib.sha256(json.dumps(rows, sort_keys=True).encode()).hexdigest(),
-            "base_model": model_id,
-            "seed": 42,
-        },
-    )
     write_json(output / "manifest.json", manifest.model_dump())
     return dict(model_version=version, output=str(output), threshold=threshold, evaluation=report)
 
 
 def validate_real(release: Path, labelled_jsonl: Path) -> dict[str, Any]:
-    """Separate, externally reviewed labels; never treat synthetic evaluation as real."""
-    detector = Detector(release)
-    rows = reviewed_rows(read_jsonl(labelled_jsonl))
-    if not rows:
-        raise ValueError("Only independently reviewed real NPC/player examples are eligible")
-    provenance = json.loads((release / "training-provenance.json").read_text())
+    """Evaluate independent real labels; own publications never establish quality."""
+    release = release.expanduser().resolve()
+    manifest = Manifest.model_validate_json((release / "manifest.json").read_text())
+    manifest.verify(release)
+    provenance_path = release / "training-provenance.json"
+    provenance_hash = hashlib.sha256(provenance_path.read_bytes()).hexdigest()
+    if manifest.files.get("training-provenance.json") != provenance_hash:
+        raise ValueError("Real validation requires checksum-bound training provenance")
+    provenance = json.loads(provenance_path.read_text())
+    if provenance.get("schema_version") != "blue-training-v2":
+        raise ValueError("Real validation requires current historical own-author provenance")
+    own_authors = provenance.get("own_author_ids")
+    if not isinstance(own_authors, list) or any(type(a) is not int or a < 1 for a in own_authors):
+        raise ValueError("Historical own-author provenance is invalid")
+    raw = read_jsonl(labelled_jsonl)
+    author_labels: dict[int, int] = {}
+    for row in raw:
+        author, label, content = row.get("author_id"), row.get("label"), row.get("text")
+        if (
+            row.get("source") not in {"team_review", "moderator"}
+            or type(author) is not int
+            or author < 1
+            or author in own_authors
+            or type(label) is not int
+            or label not in (0, 1)
+            or not isinstance(content, str)
+            or not 1 <= len(content.strip()) <= 500
+        ):
+            raise ValueError("Independent real holdout excludes own, synthetic or invalid labels")
+        if author in author_labels and author_labels[author] != label:
+            raise ValueError("Real holdout author labels conflict")
+        author_labels[author] = label
+    rows = reviewed_rows(raw)
+    if not rows or not all(any(r["label"] == label for r in rows) for label in (0, 1)):
+        raise ValueError("Independent real evaluation needs both origin classes")
     used_groups, used_hashes = set(provenance["used_groups"]), set(provenance["used_text_hashes"])
     if any(r["group"] in used_groups or text_key(r["text"]) in used_hashes for r in rows):
-        raise ValueError("Real evaluation leaks training/calibration authors or text")
+        raise ValueError("Real evaluation leaks training/calibration/test authors or text")
+    detector = Detector(release)
     report = metrics(
         [r["label"] for r in rows],
         detector.predict([r["text"] for r in rows]),
-        detector.manifest.threshold,
+        manifest.threshold,
     )
     report.update(
-        model_version=detector.manifest.version, real_labels_only=True, author_disjoint=True
+        schema_version="blue-real-v2",
+        model_version=manifest.version,
+        threshold=manifest.threshold,
+        training_provenance_sha256=provenance_hash,
+        dataset_hash=hashlib.sha256(json.dumps(rows, sort_keys=True).encode()).hexdigest(),
+        real_labels_only=True,
+        author_disjoint=True,
+        own_positive_sources_excluded=True,
+        label_source_counts=dict(Counter(r["source"] for r in rows)),
+        positive_author_count=len({r["author_id"] for r in rows if r["label"] == 1}),
+        negative_author_count=len({r["author_id"] for r in rows if r["label"] == 0}),
     )
-    write_json(release / "real-validation.json", report)
-    return report
+    validated = RealValidation.model_validate(report)
+    write_json(release / "real-validation.json", validated.model_dump())
+    return validated.model_dump()
 
 
 def activate(release: Path, active: Path) -> None:

@@ -31,14 +31,18 @@ class RedWorker(Worker):
     async def run(self, ticks: int | None = None) -> None:
         async with asyncio.timeout(self.config.identity_timeout_seconds):
             await self.store.initialize()
+            self.executor.disabled_accounts = await self.store.disabled_accounts()
+            self.executor.quarantine = self.store.quarantine
             self.executor.npc_author_ids = await self.store.npc_ids()
             if not self.executor.npc_author_ids:
                 raise ValueError("Reviewed NPC source archive is empty")
             if self.executor.transport.clock() < self.config.ends_at:
                 await self.executor.verify_sessions()
+                if not self.executor._verified_accounts:
+                    raise RuntimeError("No eligible account sessions are available")
                 event(
                     "red_sessions_verified",
-                    accounts=len(self.executor.sessions),
+                    accounts=len(self.executor._verified_accounts),
                     npc_authors=len(self.executor.npc_author_ids),
                 )
         try:

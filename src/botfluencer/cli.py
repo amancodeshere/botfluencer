@@ -52,6 +52,21 @@ def main() -> None:
     red_commands.add_parser("serve", help="Run the explicitly enabled simulation campaign")
     amendment = red_commands.add_parser("amend", help="Audit an explicit paused campaign expansion")
     amendment.add_argument("--reason", required=True)
+    red_commands.add_parser("accounts", help="Inspect durable publishing account eligibility")
+    quarantine = red_commands.add_parser(
+        "quarantine", help="Disable a configured account without replacing its history"
+    )
+    quarantine.add_argument("--account", required=True)
+    quarantine.add_argument(
+        "--reason",
+        choices=[
+            "authentication_rejected",
+            "session_expired",
+            "operator_disabled",
+            "server_banned",
+        ],
+        default="operator_disabled",
+    )
     refresh = red_commands.add_parser(
         "refresh-world", help="Refresh a private organiser news snapshot"
     )
@@ -90,6 +105,11 @@ def main() -> None:
     watch.add_argument("--once", action="store_true")
     for operation in ("status", "pause", "resume"):
         blue_commands.add_parser(operation)
+    candidates = blue_commands.add_parser(
+        "candidates", help="Inspect bounded private model evidence"
+    )
+    candidates.add_argument("--limit", type=int, default=20)
+    candidates.add_argument("--include-excerpt", action="store_true")
     approve = blue_commands.add_parser("approve")
     approve.add_argument("--post-id", type=int, required=True)
     outcome = blue_commands.add_parser("outcome")
@@ -111,6 +131,22 @@ def main() -> None:
                 from botfluencer.red.operator import amend
 
                 print(json.dumps(asyncio.run(amend(settings, RedSettings(), args.reason))))
+            elif args.red_operation in {"accounts", "quarantine"}:
+                from botfluencer.red.config import RedSettings
+                from botfluencer.red.operator import account_control
+
+                print(
+                    json.dumps(
+                        asyncio.run(
+                            account_control(
+                                settings,
+                                RedSettings(),
+                                getattr(args, "account", None),
+                                getattr(args, "reason", None),
+                            )
+                        )
+                    )
+                )
             elif args.red_operation == "refresh-world":
                 from pathlib import Path
 
@@ -153,6 +189,8 @@ def main() -> None:
                                 args.blue_operation,
                                 getattr(args, "post_id", None),
                                 getattr(args, "ruling", None),
+                                limit=getattr(args, "limit", 20),
+                                include_excerpt=getattr(args, "include_excerpt", False),
                             )
                         )
                     )
