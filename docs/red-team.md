@@ -92,6 +92,35 @@ still constrain work. The user-service drain grace is 120 seconds.
 
 ## Targets and durable limits
 
+### NPC conversation continuations
+
+Fresh NPC replies directly answering an acknowledged publication from this
+controller receive a dedicated continuation lane. The same account answers;
+success in the action ledger plus an accepted receipt establishes the parent.
+Each publication rechecks the NPC author, direct parent and complete NPC/own
+ancestry, within the existing eight-message bound. Pending or unknown parent
+receipts defer the response. Writing text that looks like a reply cannot confer
+continuation authority.
+
+Ordinary first contact retains its one-contact-per-author/24-hour rule. Verified
+continuations allow up to two further reservations per NPC/24 hours and two per
+NPC/root over that root's lifetime, with a five-minute contact cooldown.
+Queued, in-flight and unknown continuations block another turn in that root.
+Rejected and unknown reservations consume these bounds. All historical accounts,
+target deduplication, pause, deadline and team budgets remain enforced.
+
+Conversation openings and follow-up questions come from reviewed templates;
+incoming posts remain untrusted data. Topic-free acknowledgements/questions can
+qualify only through the verified continuation path. No extra model call is needed.
+
+`CTN_PUBLISH_MIN_INTERVAL_SECONDS` defaults to 20 and is deployed at 30 for a
+target of two combined publications per minute. Persisted stricter publish pacing,
+server locks and backoff take precedence. `RED_ORIGINALS_PER_REPLY` defaults to 1
+and is deployed at 2: it probes for an ordinary reply after two general posts.
+When no safe ordinary reply exists, general posts may continue; verified NPC
+continuations take priority. These settings are team-wide scheduling preferences,
+not per-account allowances or guarantees against moderation.
+
 The source of eligible NPC author IDs is the explicitly reviewed archive in
 `RED_ARCHIVE_NAMESPACE`, default `ctn-2026`. Rows marked `npc_status=npc` provide
 the team-confirmed provenance recorded in [post-collection.md](post-collection.md):

@@ -17,11 +17,15 @@ class TeamPacer:
         self.scope = "ctn-" + hashlib.sha256(code.get_secret_value().encode()).hexdigest()[:48]
 
     async def reserve(self, bucket: str) -> None:
+        floor = (
+            self.database.settings.ctn_publish_min_interval_seconds if bucket == "publish" else 0
+        )
         async with self.database.sessions.begin() as session:
             parameters = {
                 "scope": self.scope,
                 "bucket": bucket,
-                "initial_interval": INITIAL_INTERVAL_SECONDS[bucket],
+                "initial_interval": max(INITIAL_INTERVAL_SECONDS[bucket], floor),
+                "interval_floor": floor,
             }
             granted = await session.scalar(
                 text("""
@@ -31,8 +35,12 @@ class TeamPacer:
                         (:scope, :bucket, :initial_interval,
                          clock_timestamp() + :initial_interval * INTERVAL '1 second')
                     ON CONFLICT (scope, bucket) DO UPDATE
-                    SET next_allowed_at = clock_timestamp()
-                        + request_budgets.interval_seconds * INTERVAL '1 second'
+                    SET interval_seconds = GREATEST(
+                            request_budgets.interval_seconds, :interval_floor
+                        ),
+                        next_allowed_at = clock_timestamp()
+                        + GREATEST(request_budgets.interval_seconds, :interval_floor)
+                            * INTERVAL '1 second'
                     WHERE request_budgets.next_allowed_at <= clock_timestamp()
                     RETURNING interval_seconds
                 """),
@@ -62,6 +70,9 @@ class TeamPacer:
         remaining: int | None = None,
         retry_after: float = 0,
     ) -> None:
+        floor = (
+            self.database.settings.ctn_publish_min_interval_seconds if bucket == "publish" else 0
+        )
         interval: float | None = None
         if limit is not None and limit > 0 and math.isfinite(reset) and reset >= 0:
             # Respect both the documented per-minute window and refill header.
@@ -78,12 +89,17 @@ class TeamPacer:
             observed = await session.scalar(
                 text("""
                     UPDATE request_budgets
-                    SET interval_seconds = COALESCE(:new_interval, interval_seconds),
+                    SET interval_seconds = GREATEST(
+                            COALESCE(:new_interval, interval_seconds), :interval_floor,
+                            CASE WHEN :bucket = 'publish' THEN interval_seconds ELSE 0 END
+                        ),
                         next_allowed_at = GREATEST(
                             next_allowed_at,
                             clock_timestamp() + GREATEST(
                                 :retry_delay,
                                 :depleted_delay,
+                                :interval_floor,
+                                CASE WHEN :bucket = 'publish' THEN interval_seconds ELSE 0 END,
                                 COALESCE(:new_interval, interval_seconds)
                             ) * INTERVAL '1 second'
                         )
@@ -94,6 +110,7 @@ class TeamPacer:
                     "scope": self.scope,
                     "bucket": bucket,
                     "new_interval": interval,
+                    "interval_floor": floor,
                     "retry_delay": retry_delay,
                     "depleted_delay": depleted_delay,
                 },

@@ -45,7 +45,9 @@ def planner(monkeypatch, tmp_path, *, due: bool = True, latest: str | None = "po
         planning_preference=AsyncMock(
             side_effect=lambda: (preference["due"], preference["latest"])
         ),
+        original_streak=AsyncMock(return_value=0),
         candidates=AsyncMock(return_value=[]),
+        continuation_candidates=AsyncMock(return_value=[]),
         observe=AsyncMock(),
         unplanned=AsyncMock(return_value=None),
         contact_available=AsyncMock(return_value=True),
@@ -80,6 +82,7 @@ def planner(monkeypatch, tmp_path, *, due: bool = True, latest: str | None = "po
         selector_mode="reviewed",
         ends_at=now[0] + timedelta(hours=1),
         post_interval_seconds=60,
+        originals_per_reply=1,
     )
     executor = SimpleNamespace(
         transport=SimpleNamespace(clock=lambda: now[0]),
@@ -95,6 +98,23 @@ def planner(monkeypatch, tmp_path, *, due: bool = True, latest: str | None = "po
         return worker
 
     return make_worker, store, generator, executor, now, preference
+
+
+@pytest.mark.parametrize(("streak", "expected_kind"), [(1, "post"), (2, "reply")])
+async def test_configured_originals_per_reply_uses_durable_post_streak(
+    monkeypatch, tmp_path, streak: int, expected_kind: str
+) -> None:
+    make_worker, store, generator, _, _, _ = planner(monkeypatch, tmp_path, due=True)
+    make_worker().config.originals_per_reply = 2
+    store.original_streak.return_value = streak
+    store.unplanned.return_value = npc_observation()
+    await make_worker().plan_contextual()
+    assert generator.generate.await_args.kwargs["kind"] == expected_kind
+    if expected_kind == "post":
+        store.original_streak.assert_awaited_once_with()
+        store.unplanned.assert_not_awaited()
+    else:
+        store.unplanned.assert_awaited_once()
 
 
 async def test_slow_original_then_restarted_worker_prefers_reply(monkeypatch, tmp_path) -> None:

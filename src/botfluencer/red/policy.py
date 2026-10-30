@@ -47,9 +47,12 @@ def eligible(
     now: datetime,
     *,
     allow_threads: bool = False,
+    continuation: bool = False,
 ) -> bool:
     data = observation.metadata
     if observation.source != "social" or data.get("author_id") not in npc_ids:
+        return False
+    if continuation and data.get("kind") != "reply":
         return False
     if data.get("kind") not in ({"post", "reply"} if allow_threads else {"post"}):
         return False
@@ -65,7 +68,7 @@ def eligible(
     except (KeyError, ValueError, TypeError):
         return False
     # Topic selection uses public text only, never inferred traits or private views.
-    return any(word in observation.text.lower() for word in TOPIC_TERMS)
+    return continuation or any(word in observation.text.lower() for word in TOPIC_TERMS)
 
 
 def draft_for(observation: ObservationInput) -> Draft:

@@ -98,6 +98,29 @@ ARGUMENTS: dict[Angle, dict[Style, str]] = {
     },
 }
 
+# Finite openings respond to public wording without treating it as instructions.
+CONVERSATION_OPENINGS = {
+    "question": "That's a fair question.",
+    "acknowledgement": "Thanks for continuing the discussion.",
+    "concern": "That concern deserves careful consideration.",
+}
+CONVERSATION_FOLLOWUPS = {
+    "privacy": "Which privacy safeguard matters most to you?",
+    "exemptions": "What would make exemptions clearer?",
+    "oversight": "What public oversight would help?",
+    "access": "What would make access fairer?",
+    "preparation": "What practical step should come first?",
+}
+
+
+def conversation_opening(text: str) -> str:
+    if re.search(r"\b(?:concern|worr|unfair|risk|fear|doubt)", text, re.IGNORECASE):
+        return CONVERSATION_OPENINGS["concern"]
+    if "?" in text:
+        return CONVERSATION_OPENINGS["question"]
+    return CONVERSATION_OPENINGS["acknowledgement"]
+
+
 # Source vocabulary selects a fixed topic label. No source headline, quote or
 # arbitrary model prose can cross the publication boundary through this mapping.
 TOPIC_LABELS = (
@@ -224,6 +247,7 @@ def render_selection(
     account: str,
     kind: Literal["post", "reply"],
     world: WorldContext,
+    conversation: bool = False,
 ) -> Draft:
     """Render only reviewed civic opinions, bounded topic labels and an exact URL."""
     if selection.kind != kind or selection.target_id != observation.external_id:
@@ -244,6 +268,12 @@ def render_selection(
         f"{publisher} on {_topic_label(source)}: "
         f"{ARGUMENTS[selection.angle][selection.style]} {source.url}"
     )
+    if conversation:
+        body = (
+            f"{conversation_opening(observation.text)} "
+            f"{ARGUMENTS[selection.angle]['statement']} "
+            f"{CONVERSATION_FOLLOWUPS[selection.angle]} {source.url}"
+        )
     if "@" in body or any(unicodedata.category(char).startswith("C") for char in body):
         raise ValueError("Source URL cannot be published as a body link")
     # Long official URLs still fail closed; never silently truncate a citation.
@@ -286,7 +316,9 @@ class ContextualGenerator:
                     "gif_enabled": gif_enabled,
                     "selector_mode": "llm" if use_llm else "reviewed-topic-v1",
                     "gif_urls": sorted(ALLOWED_GIF_URLS),
-                    "renderer_version": "contextual-red-selector-v3",
+                    "renderer_version": "contextual-red-selector-v4-conversation",
+                    "conversation_openings": CONVERSATION_OPENINGS,
+                    "conversation_followups": CONVERSATION_FOLLOWUPS,
                 },
                 sort_keys=True,
             ).encode()
@@ -299,16 +331,24 @@ class ContextualGenerator:
         account: str,
         kind: Literal["post", "reply"] = "reply",
         role: str | None = None,
+        conversation: bool = False,
     ) -> Draft:
         self.world.require_fresh(self.transport.clock(), self.max_world_age_hours)
         _require_target(observation.external_id, account, kind)
         editorial_role = role_for(account) if role is None else role
         if editorial_role not in EDITORIAL_ROLES:
             raise ValueError("Unknown community desk role")
-        if not self.use_llm:
+        if conversation and kind != "reply":
+            raise ValueError("Conversation generation requires a reply")
+        if not self.use_llm or conversation:
             selection = reviewed_selection(observation, account, kind, self.world, editorial_role)
             draft = render_selection(
-                selection, observation=observation, account=account, kind=kind, world=self.world
+                selection,
+                observation=observation,
+                account=account,
+                kind=kind,
+                world=self.world,
+                conversation=conversation,
             )
             return self._finish(draft, selection, account, kind, observation)
         payload: dict[str, Any] = {
@@ -352,7 +392,12 @@ class ContextualGenerator:
                 raise ValueError("Unexpected number of model choices")
             selection = GeneratedSelection.model_validate_json(choices[0]["message"]["content"])
             draft = render_selection(
-                selection, observation=observation, account=account, kind=kind, world=self.world
+                selection,
+                observation=observation,
+                account=account,
+                kind=kind,
+                world=self.world,
+                conversation=conversation,
             )
         except (KeyError, IndexError, TypeError, ValueError, ValidationError):
             raise InvalidGeneration("Model returned an invalid red argument selection") from None

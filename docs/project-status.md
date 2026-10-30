@@ -1,5 +1,21 @@
 # Project status
 
+## Conversation refresh — 31 October 2026
+
+The user supplied portal counts of 59 registered, 22 banned, maximum total 200
+and maximum active 50. Thirteen new accounts were registered and authenticated
+within the resulting 13-slot headroom. Replenishment preserves all historical
+identities and the existing campaign deadline; activation verification follows.
+
+Implementation adds acknowledged-parent NPC conversation continuations, same-account
+responses, fresh ancestry verification, durable turn/cooldown bounds and finite
+reviewed conversation text. The deployment profile targets two combined
+publications/minute, with a soft two-general-posts/ordinary-reply preference and
+continuation priority. Independent reviews are clean and 338 unit cases pass.
+Migration 0008 is additive and passed isolated metadata drift checking. Local
+integration setup stalled in Postgres connection establishment; the full hosted
+integration suite is the gate before application migration and worker deployment.
+
 ## Verified running deployment — 31 October 2026
 
 Nine replacement accounts were registered, authenticated to the team and each

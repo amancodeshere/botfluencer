@@ -11,6 +11,7 @@ from botfluencer.domain import ObservationInput
 from botfluencer.llm.mock import MockGenerator
 from botfluencer.platform.base import PermanentRejection, SafeRetry
 from botfluencer.red.config import RedSettings
+from botfluencer.red.conversation import Continuation
 from botfluencer.red.executor import ReplyExecutor
 from botfluencer.red.generator import ContextualGenerator
 from botfluencer.red.policy import draft_for, eligible, role_for
@@ -22,18 +23,24 @@ from botfluencer.storage.models import Observation
 
 
 class RedWorker(Worker):
+    _prefer_ordinary = False
+
     def __init__(self, repo: RedStore, executor: ReplyExecutor, config: RedSettings) -> None:
         super().__init__(repo, executor, MockGenerator())
         self.store = repo
         self.executor = executor
         self.config = config
         self._planner: asyncio.Task[None] | None = None
+        self._prefer_ordinary = False
+        self._conversation_targets: frozenset[str] = frozenset()
 
     async def run(self, ticks: int | None = None) -> None:
         async with asyncio.timeout(self.config.identity_timeout_seconds):
             await self.store.initialize()
             self.executor.disabled_accounts = await self.store.disabled_accounts()
             self.executor.quarantine = self.store.quarantine
+            self.executor.accepted_parent = self.store.accepted_parent
+            self.executor.continuation_for_action = self.store.continuation_for_action
             self.executor._own_author_ids = frozenset(
                 int(account)
                 for account in await self.store.historical_accounts() | set(self.settings.accounts)
@@ -58,13 +65,119 @@ class RedWorker(Worker):
                 with suppress(asyncio.CancelledError):
                     await self._planner
 
-    async def _contextual_reply(self) -> tuple[Observation, ObservationInput] | None:
+    async def _conversation_reply(
+        self,
+    ) -> tuple[Observation, ObservationInput, Continuation, str] | None:
+        if not self.config.allow_threads:
+            return None
+        for archived in await self.store.continuation_candidates(self.executor.npc_author_ids):
+            try:
+                target = await self.executor._read_preflight(
+                    f"/posts/{archived.external_id}", wait_for_pacing=True
+                )
+                own_parent = await self.executor._has_own_direct_parent(target)
+                if own_parent:
+                    self._conversation_targets = getattr(
+                        self, "_conversation_targets", frozenset()
+                    ) | {archived.external_id}
+                    if await self.store.accepted_parent(target["reply_to_post_id"]) is None:
+                        # A visible own publication may precede its outcome commit.
+                        # Keep pending/unknown parents in this lane until proof exists.
+                        continue
+                elif eligible(
+                    archived,
+                    self.executor.npc_author_ids,
+                    self.executor.transport.clock(),
+                    allow_threads=True,
+                ):
+                    # An ordinary NPC discussion remains available to the ordinary planner.
+                    continue
+                proof, account = await self.executor._continuation_coordinates(
+                    target, archived.external_id
+                )
+                # Fresh target data governs age, identity and the conversational opening.
+                item = ObservationInput(
+                    external_id=archived.external_id,
+                    text=target["body"],
+                    source="social",
+                    metadata={
+                        "conversation_candidate": True,
+                        "post_id": target["post_id"],
+                        "author_id": target["author_id"],
+                        "kind": target["kind"],
+                        "created_at": target["created_at"],
+                        "reply_to_post_id": target["reply_to_post_id"],
+                        "root_post_id": target["root_post_id"],
+                    },
+                )
+                if not eligible(
+                    item,
+                    self.executor.npc_author_ids,
+                    self.executor.transport.clock(),
+                    allow_threads=True,
+                    continuation=True,
+                ):
+                    raise PermanentRejection("Ineligible fresh continuation")
+            except (PermanentRejection, ValueError, KeyError, TypeError):
+                await self.store.observe([archived])
+                observation = await self.store.find_observation(archived.external_id)
+                if observation is not None:
+                    await self.store.skip(
+                        observation.id, archived.external_id, "No verified continuation authority"
+                    )
+                continue
+            self._conversation_targets = getattr(self, "_conversation_targets", frozenset()) | {
+                item.external_id
+            }
+            if not await self.store.continuation_available(int(item.metadata["author_id"]), proof):
+                continue
+            await self.store.observe([item])
+            observation = await self.store.find_observation(item.external_id)
+            if observation is not None:
+                return observation, item, proof, account
+        return None
+
+    async def _contextual_reply(
+        self,
+    ) -> tuple[Observation, ObservationInput, Continuation | None, str | None] | None:
+        if not self._prefer_ordinary:
+            conversation = await self._conversation_reply()
+            if conversation is not None:
+                self._prefer_ordinary = True
+                return conversation
+        ordinary = await self._ordinary_reply()
+        self._prefer_ordinary = False
+        if ordinary is not None:
+            return ordinary[0], ordinary[1], None, None
+        return await self._conversation_reply()
+
+    async def _ordinary_reply(self) -> tuple[Observation, ObservationInput] | None:
         await self.store.observe(await self.store.candidates(self.executor.npc_author_ids))
+        excluded: frozenset[str] = getattr(self, "_conversation_targets", frozenset())
         for _ in range(8):
-            observation = await self.store.unplanned(DISPATCHER, STRATEGY_VERSION, PROMPT_VERSION)
+            observation = await self.store.unplanned(
+                DISPATCHER, STRATEGY_VERSION, PROMPT_VERSION, exclude_external_ids=excluded
+            )
             if observation is None:
                 break
             item = ObservationInput.model_validate(observation.payload)
+            target = None
+            if self.config.allow_threads and item.metadata.get("kind") == "reply":
+                try:
+                    target = await self.executor._read_preflight(
+                        f"/posts/{item.external_id}", wait_for_pacing=True
+                    )
+                    if await self.executor._has_own_direct_parent(target):
+                        excluded = excluded | {item.external_id}
+                        self._conversation_targets = excluded
+                        # Own-parent responses must acquire continuation proof first,
+                        # even when ordinary planning runs before discovery.
+                        continue
+                except PermanentRejection:
+                    await self.store.skip(
+                        observation.id, item.external_id, "Ineligible conversation parent"
+                    )
+                    continue
             if not eligible(
                 item,
                 self.executor.npc_author_ids,
@@ -77,9 +190,10 @@ class RedWorker(Worker):
                 continue
             if item.metadata.get("kind") == "reply":
                 try:
-                    target = await self.executor._read_preflight(
-                        f"/posts/{item.external_id}", wait_for_pacing=True
-                    )
+                    if target is None:
+                        target = await self.executor._read_preflight(
+                            f"/posts/{item.external_id}", wait_for_pacing=True
+                        )
                     await self.executor._reply_coordinates(target, item.external_id)
                 except PermanentRejection:
                     await self.store.skip(
@@ -113,15 +227,28 @@ class RedWorker(Worker):
                 )
                 account = await self.store.next_account()
                 original_due, latest_kind = await self.store.planning_preference()
-                # A completed planning turn persists in the ledger across restarts.
-                # Even a slow planner gives available replies a turn after an original.
-                reply = (
-                    await self._contextual_reply()
-                    if not original_due or latest_kind == "post"
-                    else None
-                )
+                reply: tuple[Observation, ObservationInput, Continuation | None, str | None] | None
+                originals_per_reply = getattr(self.config, "originals_per_reply", 1)
+                if originals_per_reply > 1:
+                    # Direct, verified responses keep priority over the ordinary mix.
+                    reply = await self._conversation_reply()
+                    if reply is None and (
+                        not original_due
+                        or await self.store.original_streak() >= originals_per_reply
+                    ):
+                        ordinary = await self._ordinary_reply()
+                        if ordinary is not None:
+                            reply = ordinary[0], ordinary[1], None, None
+                else:
+                    # Preserve the existing one-original/one-reply default.
+                    reply = (
+                        await self._contextual_reply()
+                        if not original_due or latest_kind == "post"
+                        else None
+                    )
                 now = self.executor.transport.clock()
                 kind: Literal["post", "reply"]
+                continuation = None
                 if reply is None:
                     if not original_due:
                         return
@@ -138,17 +265,25 @@ class RedWorker(Worker):
                     observation = await self.store.find_observation(item.external_id)
                     kind = "post"
                 else:
-                    observation, item = reply
+                    observation, item, continuation, parent_account = reply
+                    if parent_account is not None:
+                        account = parent_account
                     kind = "reply"
                 if observation is None:
                     return
-                if getattr(
-                    self.config, "selector_mode", "llm"
-                ) == "llm" and not await self.store.reserve_generation(account):
+                if (
+                    getattr(self.config, "selector_mode", "llm") == "llm"
+                    and continuation is None
+                    and not await self.store.reserve_generation(account)
+                ):
                     return
                 order = sorted(self.settings.accounts).index(account)
                 draft = await generator.generate(
-                    item, account=account, kind=kind, role=role_for(account, order=order)
+                    item,
+                    account=account,
+                    kind=kind,
+                    role=role_for(account, order=order),
+                    conversation=continuation is not None,
                 )
                 if (
                     await self.store.is_paused()
@@ -161,8 +296,9 @@ class RedWorker(Worker):
                     account,
                     draft,
                     prompt_version=generator.prompt_version,
+                    continuation=continuation,
                 )
-                if not planned:
+                if not planned and continuation is None:
                     await self.store.skip(
                         observation.id,
                         item.external_id,

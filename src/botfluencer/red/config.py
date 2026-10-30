@@ -30,6 +30,7 @@ class RedSettings(BaseSettings):
     identity_timeout_seconds: float = Field(default=600, ge=30, le=900)
     max_pending_actions: int = Field(default=4, ge=1, le=8)
     post_interval_seconds: float = Field(default=300, ge=20)
+    originals_per_reply: int = Field(default=1, ge=1, le=3)
 
     @model_validator(mode="after")
     def bounded_window(self) -> "RedSettings":

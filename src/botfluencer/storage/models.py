@@ -247,10 +247,21 @@ class RedTarget(Base):
     """Team/target reservation survives versions, namespaces and ambiguous writes."""
 
     __tablename__ = "red_targets"
+    __table_args__ = (
+        Index(
+            "ix_red_targets_conversation",
+            "scope",
+            "author_id",
+            "conversation_root_id",
+            "created_at",
+        ),
+    )
     scope: Mapped[str] = mapped_column(String(64), primary_key=True)
     post_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     author_id: Mapped[int] = mapped_column(BigInteger)
     action_id: Mapped[UUID] = mapped_column(ForeignKey("actions.id"), unique=True)
+    conversation_root_id: Mapped[int | None] = mapped_column(BigInteger)
+    continuation_parent_action_id: Mapped[UUID | None] = mapped_column(ForeignKey("actions.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

@@ -8,9 +8,11 @@ from uuid import UUID
 from sqlalchemy import String, exists, func, or_, select
 from sqlalchemy import cast as sql_cast
 from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from botfluencer.domain import ActionIntent, Draft, ObservationInput
 from botfluencer.red.config import RedSettings
+from botfluencer.red.conversation import AcceptedParent, Continuation
 from botfluencer.red.policy import TOPIC_TERMS
 from botfluencer.storage.models import (
     Action,
@@ -200,6 +202,24 @@ class RedStore(Repository):
             row = (await session.execute(select(recent_original, latest_kind))).one()
             return not bool(row[0]), row[1]
 
+    async def original_streak(self, limit: int = 3) -> int:
+        """Count a bounded run of durable original planning turns across restarts."""
+        if not 1 <= limit <= 3:
+            raise ValueError("Original streak limit must be between one and three")
+        async with self.db.sessions() as session:
+            kinds = await session.scalars(
+                select(Action.payload["kind"].as_string())
+                .where(Action.namespace == self.namespace)
+                .order_by(Action.created_at.desc(), Action.id.desc())
+                .limit(limit)
+            )
+            streak = 0
+            for kind in kinds:
+                if kind != "post":
+                    break
+                streak += 1
+            return streak
+
     async def original_due(self) -> bool:
         return (await self.planning_preference())[0]
 
@@ -291,7 +311,12 @@ class RedStore(Repository):
             return result
 
     async def unplanned(
-        self, account: str, strategy_version: str, prompt_version: str
+        self,
+        account: str,
+        strategy_version: str,
+        prompt_version: str,
+        *,
+        exclude_external_ids: frozenset[str] = frozenset(),
     ) -> Observation | None:
         if account != DISPATCHER:
             return await super().unplanned(account, strategy_version, prompt_version)
@@ -305,6 +330,11 @@ class RedStore(Repository):
                     Observation.namespace == self.namespace,
                     # Originals use find_observation with their exact internal key.
                     Observation.payload["source"].as_string() == "social",
+                    Observation.external_id.not_in(exclude_external_ids),
+                    # Routing only: this flag cannot authorize a continuation.
+                    ~Observation.payload["metadata"]["conversation_candidate"]
+                    .as_boolean()
+                    .is_(True),
                     ~planned,
                 )
                 .order_by(
@@ -375,6 +405,254 @@ class RedStore(Repository):
                 if row.post and row.post.strip()
             ]
 
+    async def continuation_candidates(self, npc_ids: frozenset[int]) -> list[ObservationInput]:
+        """A bounded discovery lane; fresh ancestry and receipts authorize replies.
+
+        Keep observed but unplanned rows eligible so contact cooldowns survive
+        restart without permanently discarding an NPC response.
+        """
+        async with self.db.sessions() as session:
+            planned = exists().where(
+                Observation.namespace == self.namespace,
+                Observation.external_id == sql_cast(NPCPost.post_id, String),
+                Decision.observation_id == Observation.id,
+                Decision.account == DISPATCHER,
+            )
+            reserved = exists().where(
+                RedTarget.scope == self.scope, RedTarget.post_id == NPCPost.post_id
+            )
+            rows = await session.scalars(
+                select(NPCPost)
+                .where(
+                    NPCPost.namespace == self.config.archive_namespace,
+                    NPCPost.author_id.in_(npc_ids),
+                    NPCPost.kind == "reply",
+                    NPCPost.post.is_not(None),
+                    func.length(func.btrim(NPCPost.post, " \t\r\n")) > 0,
+                    NPCPost.time_stamp >= func.now() - timedelta(hours=4),
+                    NPCPost.time_stamp <= func.now(),
+                    ~planned,
+                    ~reserved,
+                )
+                .order_by(NPCPost.time_stamp.desc(), NPCPost.post_id.desc())
+                .limit(8)
+            )
+            return [
+                ObservationInput(
+                    external_id=str(row.post_id),
+                    text=row.post,
+                    source="social",
+                    metadata={
+                        "post_id": row.post_id,
+                        "author_id": row.author_id,
+                        "kind": row.kind,
+                        "created_at": row.time_stamp.isoformat(),
+                    },
+                )
+                for row in rows
+                if row.post and row.post.strip()
+            ]
+
+    async def _accepted_parent(
+        self, session: AsyncSession, external_id: str
+    ) -> AcceptedParent | None:
+        if not external_id.isascii() or not external_id.isdecimal() or external_id.startswith("0"):
+            return None
+        disabled = exists().where(
+            RedAccountControl.scope == self.scope,
+            RedAccountControl.account == Action.account,
+            RedAccountControl.disabled.is_(True),
+        )
+        rows = (
+            await session.execute(
+                select(Action.id, Action.account)
+                .join(Outcome, Outcome.action_id == Action.id)
+                .where(
+                    Action.namespace == self.namespace,
+                    Action.status == "succeeded",
+                    Action.account.in_(self.settings.accounts),
+                    Outcome.kind == "accepted",
+                    Outcome.payload["external_id"].as_string() == external_id,
+                    ~disabled,
+                )
+                .distinct()
+                .limit(2)
+            )
+        ).all()
+        if len(rows) != 1:
+            return None
+        action_id, account = rows[0]
+        return AcceptedParent(action_id=action_id, account=account, external_id=external_id)
+
+    async def accepted_parent(self, external_id: int | str) -> AcceptedParent | None:
+        async with self.db.sessions() as session:
+            return await self._accepted_parent(session, str(external_id))
+
+    async def _valid_continuation(
+        self, session: AsyncSession, continuation: Continuation, account: str
+    ) -> bool:
+        if (
+            not self.config.allow_threads
+            or isinstance(continuation.root_id, bool)
+            or continuation.root_id < 1
+            or isinstance(continuation.npc_author_id, bool)
+            or continuation.npc_author_id < 1
+        ):
+            return False
+        campaign = await session.get(RedCampaign, self.scope)
+        if campaign is None or str(continuation.npc_author_id) in campaign.accounts:
+            return False
+        reviewed = await session.scalar(
+            select(
+                exists().where(
+                    NPCPost.namespace == self.config.archive_namespace,
+                    NPCPost.author_id == continuation.npc_author_id,
+                    NPCPost.npc_status == "npc",
+                )
+            )
+        )
+        conflicting = await session.scalar(
+            select(
+                exists().where(
+                    NPCPost.namespace == self.config.archive_namespace,
+                    NPCPost.author_id == continuation.npc_author_id,
+                    NPCPost.npc_status == "player",
+                )
+            )
+        )
+        if not reviewed or conflicting:
+            return False
+        parent = await self._accepted_parent(session, continuation.parent_external_id)
+        if (
+            parent is None
+            or parent.action_id != continuation.parent_action_id
+            or parent.account != account
+        ):
+            return False
+        action = await session.get(Action, parent.action_id)
+        if action is None:
+            return False
+        if action.payload.get("kind") == "post":
+            return str(continuation.root_id) == parent.external_id
+        if action.payload.get("kind") != "reply":
+            return False
+        reservation = await session.scalar(
+            select(RedTarget).where(
+                RedTarget.scope == self.scope, RedTarget.action_id == parent.action_id
+            )
+        )
+        # Historical ordinary replies have no saved root; the executor freshly
+        # verifies that ancestry. Later continuation parents bind the root here.
+        return reservation is not None and reservation.conversation_root_id in (
+            None,
+            continuation.root_id,
+        )
+
+    async def _continuation_available(
+        self, session: AsyncSession, author_id: int, continuation: Continuation, now: datetime
+    ) -> bool:
+        if author_id != continuation.npc_author_id:
+            return False
+        base = (RedTarget.scope == self.scope, RedTarget.author_id == author_id)
+        last_contact = await session.scalar(select(func.max(RedTarget.created_at)).where(*base))
+        last_outcome = await session.scalar(
+            select(func.max(Outcome.created_at))
+            .join(RedTarget, RedTarget.action_id == Outcome.action_id)
+            .where(*base)
+        )
+        if last_outcome is not None:
+            last_contact = max(last_contact, last_outcome) if last_contact else last_outcome
+        if last_contact is not None and last_contact > now - timedelta(minutes=5):
+            return False
+        turns = await session.scalar(
+            select(func.count())
+            .select_from(RedTarget)
+            .where(
+                *base,
+                RedTarget.continuation_parent_action_id.is_not(None),
+                RedTarget.created_at > now - timedelta(hours=24),
+            )
+        )
+        root_turns = await session.scalar(
+            select(func.count())
+            .select_from(RedTarget)
+            .where(
+                *base,
+                RedTarget.continuation_parent_action_id.is_not(None),
+                RedTarget.conversation_root_id == continuation.root_id,
+            )
+        )
+        blocked = await session.scalar(
+            select(RedTarget.post_id)
+            .join(Action, Action.id == RedTarget.action_id)
+            .where(
+                RedTarget.scope == self.scope,
+                RedTarget.conversation_root_id == continuation.root_id,
+                RedTarget.continuation_parent_action_id.is_not(None),
+                Action.status.in_(("queued", "in_flight", "unknown")),
+            )
+            .limit(1)
+        )
+        return (turns or 0) < 2 and (root_turns or 0) < 2 and blocked is None
+
+    async def continuation_available(self, author_id: int, continuation: Continuation) -> bool:
+        async with self.db.sessions() as session:
+            now = cast(datetime, await session.scalar(select(func.now())))
+            parent = await self._accepted_parent(session, continuation.parent_external_id)
+            return (
+                parent is not None
+                and await self._valid_continuation(session, continuation, parent.account)
+                and await self._continuation_available(session, author_id, continuation, now)
+            )
+
+    async def continuation_for_action(self, action_id: UUID) -> Continuation | None:
+        """Recover authority from the reservation, never observation metadata.
+
+        None denotes ordinary intent. Invalid saved continuation authority raises
+        so callers cannot silently downgrade it into an ordinary thread reply.
+        """
+        async with self.db.sessions() as session:
+            reservation = await session.scalar(
+                select(RedTarget).where(
+                    RedTarget.scope == self.scope, RedTarget.action_id == action_id
+                )
+            )
+            if reservation is None or reservation.continuation_parent_action_id is None:
+                return None
+            action = await session.get(Action, action_id)
+            receipts = list(
+                await session.scalars(
+                    select(Outcome.payload["external_id"].as_string())
+                    .where(
+                        Outcome.action_id == reservation.continuation_parent_action_id,
+                        Outcome.kind == "accepted",
+                    )
+                    .distinct()
+                    .limit(2)
+                )
+            )
+            if (
+                action is None
+                or action.namespace != self.namespace
+                or reservation.conversation_root_id is None
+                or len(receipts) != 1
+                or not isinstance(receipts[0], str)
+            ):
+                raise ValueError("Invalid durable continuation authority")
+            continuation = Continuation(
+                root_id=reservation.conversation_root_id,
+                parent_action_id=reservation.continuation_parent_action_id,
+                parent_external_id=receipts[0],
+                npc_author_id=reservation.author_id,
+            )
+            if (
+                action.payload.get("kind") != "reply"
+                or action.payload.get("target_id") != str(reservation.post_id)
+                or not await self._valid_continuation(session, continuation, action.account)
+            ):
+                raise ValueError("Invalid durable continuation authority")
+            return continuation
+
     async def skip(self, observation_id: UUID, external_id: str, reason: str) -> None:
         async with self.db.sessions.begin() as session:
             await session.execute(
@@ -399,6 +677,7 @@ class RedStore(Repository):
         draft: Draft,
         *,
         prompt_version: str = PROMPT_VERSION,
+        continuation: Continuation | None = None,
     ) -> bool:
         async with self.db.sessions.begin() as session:
             campaign = await session.scalar(
@@ -411,11 +690,25 @@ class RedStore(Repository):
                     RedAccountControl.scope == self.scope, RedAccountControl.account == account
                 )
             )
-            if disabled:
+            if (
+                disabled
+                or account not in self.settings.accounts
+                or account not in campaign.accounts
+            ):
+                return False
+            control = await self._control(session)
+            if control.paused:
                 return False
             now = cast(datetime, await session.scalar(select(func.now())))
             if not campaign.starts_at <= now < campaign.ends_at:
                 return False
+            if continuation is not None:
+                if draft.kind != "reply" or not await self._valid_continuation(
+                    session, continuation, account
+                ):
+                    return False
+                if not await self._continuation_available(session, author_id, continuation, now):
+                    return False
             # Cross-account and cross-version reservation includes rejected/unknown writes.
             seen = (
                 await session.get(RedTarget, (self.scope, int(draft.target_id)))
@@ -432,7 +725,7 @@ class RedStore(Repository):
                     )
                     .limit(1)
                 )
-                if draft.kind == "reply"
+                if draft.kind == "reply" and continuation is None
                 else None
             )
             total = await session.scalar(
@@ -445,7 +738,12 @@ class RedStore(Repository):
                     Action.namespace == self.namespace, Action.key == self.key(draft.target_id)
                 )
             )
-            if existing is not None:
+            decided = await session.scalar(
+                select(Decision.id).where(
+                    Decision.namespace == self.namespace, Decision.key == self.key(draft.target_id)
+                )
+            )
+            if existing is not None or decided is not None:
                 return False
             decision = Decision(
                 namespace=self.namespace,
@@ -454,7 +752,11 @@ class RedStore(Repository):
                 account=DISPATCHER,
                 strategy_version=STRATEGY_VERSION,
                 prompt_version=prompt_version,
-                rationale="Curated simulation reply to reviewed NPC; one team contact per 24h",
+                rationale=(
+                    "Reviewed NPC conversation continuation with durable parent receipt"
+                    if continuation
+                    else "Curated simulation reply to reviewed NPC; one team contact per 24h"
+                ),
             )
             session.add(decision)
             await session.flush()
@@ -474,6 +776,10 @@ class RedStore(Repository):
                         post_id=int(draft.target_id),
                         author_id=author_id,
                         action_id=action.id,
+                        conversation_root_id=continuation.root_id if continuation else None,
+                        continuation_parent_action_id=(
+                            continuation.parent_action_id if continuation else None
+                        ),
                     )
                 )
             return True

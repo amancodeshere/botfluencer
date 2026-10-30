@@ -125,6 +125,14 @@ headroom and the existing campaign deadline, and retains partial credentials
 without repeating ambiguous registrations.
 
 Account sessions must match the configured team through authenticated `/auth/me`.
+
+Additive migration 0008 attaches nullable continuation parent/root coordinates
+to target reservations. A continuation requires an accepted, succeeded own
+parent action, the same active account and fresh NPC/own ancestry verification.
+Per-author, per-root and pending-root bounds are checked under the campaign lock;
+the executor reloads durable authority by child action ID before publishing.
+Ordinary contact limits remain unchanged. Shared publishing can use a configured
+interval floor, retained across responses and restarts.
 Durable `red_account_controls` quarantines unavailable sessions while healthy
 accounts continue. Queued work for disabled accounts fails; unknown and in-flight
 work, campaign membership and historical own-account exclusions remain intact.

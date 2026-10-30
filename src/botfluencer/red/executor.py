@@ -11,6 +11,7 @@ from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
+from uuid import UUID
 
 import httpx
 from pydantic import SecretStr
@@ -21,6 +22,7 @@ from botfluencer.competition.transport import CompetitionTransport
 from botfluencer.domain import ActionIntent, ObservationInput, Receipt, Reconciliation
 from botfluencer.platform.base import PermanentRejection, SafeRetry
 from botfluencer.platform.ctn import CTNPlatform
+from botfluencer.red.conversation import AcceptedParent, Continuation
 from botfluencer.red.world import ALLOWED_GIF_URLS, validate_source_url
 
 
@@ -51,6 +53,8 @@ class ReplyExecutor:
         disabled_accounts: set[str] | None = None,
         quarantine: Callable[[str, str], Awaitable[None]] | None = None,
         own_author_ids: frozenset[int] | None = None,
+        accepted_parent: Callable[[int | str], Awaitable[AcceptedParent | None]] | None = None,
+        continuation_for_action: Callable[[UUID], Awaitable[Continuation | None]] | None = None,
     ) -> None:
         if ends_at.utcoffset() is None:
             raise ValueError("Reply execution deadline requires an explicit timezone")
@@ -60,6 +64,8 @@ class ReplyExecutor:
         self.allow_threads = allow_threads
         self.disabled_accounts = set(disabled_accounts or ())
         self.quarantine = quarantine
+        self.accepted_parent = accepted_parent
+        self.continuation_for_action = continuation_for_action
         self.expected_team_id = _positive_id(expected_team_id)
         self.ends_at = ends_at
         self.npc_author_ids = frozenset(_positive_id(value) for value in npc_author_ids)
@@ -203,7 +209,9 @@ class ReplyExecutor:
         except ValueError:
             raise PermanentRejection("Competition preflight returned an invalid document") from None
 
-    async def _reply_coordinates(self, target: Any, target_id: str) -> tuple[int, int]:
+    async def _reply_coordinates(
+        self, target: Any, target_id: str, *, require_continuation: bool = False
+    ) -> tuple[int, int]:
         try:
             if not isinstance(target, dict):
                 raise ValueError("Unexpected target response")
@@ -244,6 +252,12 @@ class ReplyExecutor:
                     or _positive_id(parent.get("author_id")) not in allowed_authors
                 ):
                     raise ValueError("Reply ancestor is not an authorised simulation account")
+                if (
+                    require_continuation
+                    and len(seen) == 2
+                    and parent.get("author_id") in self._own_author_ids
+                ):
+                    raise ValueError("Own direct parent requires persisted continuation authority")
                 parent_root = parent.get("root_post_id")
                 if parent_id == root_id:
                     if (
@@ -262,6 +276,67 @@ class ReplyExecutor:
             raise PermanentRejection(
                 "Reply target does not have a verified simulation ancestry"
             ) from None
+
+    async def _has_own_direct_parent(self, target: Any) -> bool:
+        """Classify routing from a fresh parent; this never authorizes a reply."""
+        if not isinstance(target, dict) or target.get("kind") != "reply":
+            return False
+        try:
+            parent_id = _positive_id(target.get("reply_to_post_id"))
+            parent = await self._read_preflight(f"/posts/{parent_id}", wait_for_pacing=True)
+            if not isinstance(parent, dict) or _positive_id(parent.get("post_id")) != parent_id:
+                raise ValueError("Invalid direct parent document")
+            return _positive_id(parent.get("author_id")) in self._own_author_ids
+        except ValueError:
+            raise PermanentRejection("Reply has an invalid direct parent") from None
+
+    async def _continuation_coordinates(
+        self, target: Any, target_id: str
+    ) -> tuple[Continuation, str]:
+        """Prove a direct response to an acknowledged action, using fresh ancestry."""
+        _, root_id = await self._reply_coordinates(target, target_id)
+        if target.get("kind") != "reply" or self.accepted_parent is None:
+            raise PermanentRejection("Continuation requires an acknowledged direct parent")
+        try:
+            parent_id = _positive_id(target.get("reply_to_post_id"))
+        except ValueError:
+            raise PermanentRejection("Continuation requires a valid direct parent") from None
+        accepted = await self.accepted_parent(parent_id)
+        if accepted is None or accepted.external_id != str(parent_id):
+            raise PermanentRejection("Continuation parent has no accepted durable receipt")
+        parent = await self._read_preflight(f"/posts/{parent_id}", wait_for_pacing=True)
+        if (
+            not isinstance(parent, dict)
+            or parent.get("post_id") != parent_id
+            or parent.get("author_id") != int(accepted.account)
+            or accepted.account not in self._verified_accounts
+            or accepted.account in self.disabled_accounts
+        ):
+            raise PermanentRejection("Continuation must use the acknowledged parent's account")
+        return (
+            Continuation(root_id, accepted.action_id, accepted.external_id, target["author_id"]),
+            accepted.account,
+        )
+
+    async def _revalidate_continuation(self, intent: ActionIntent) -> Continuation | None:
+        try:
+            proof = (
+                await self.continuation_for_action(intent.id)
+                if self.continuation_for_action is not None
+                else None
+            )
+        except ValueError:
+            raise PermanentRejection("Persisted continuation authority is invalid") from None
+        if proof is not None:
+            if intent.draft.kind != "reply":
+                raise PermanentRejection("Continuation must be a reply")
+            target = await self._read_preflight(
+                f"/posts/{intent.draft.target_id}", wait_for_pacing=True
+            )
+            fresh, account = await self._continuation_coordinates(target, intent.draft.target_id)
+            if fresh != proof or account != intent.account:
+                raise PermanentRejection("Fresh continuation differs from its persisted authority")
+        return proof
 
     async def execute(self, intent: ActionIntent) -> Receipt:
         self._require_enabled()
@@ -305,7 +380,25 @@ class ReplyExecutor:
                     "Reply target must be a positive competition post identifier"
                 )
             target = await self._read_preflight(f"/posts/{target_id}")
-            post_id, root_id = await self._reply_coordinates(target, target_id)
+            try:
+                proof = (
+                    await self.continuation_for_action(intent.id)
+                    if self.continuation_for_action is not None
+                    else None
+                )
+            except ValueError:
+                raise PermanentRejection("Persisted continuation authority is invalid") from None
+            post_id, root_id = await self._reply_coordinates(
+                target,
+                target_id,
+                require_continuation=self.continuation_for_action is not None and proof is None,
+            )
+            if proof is not None and (
+                proof.root_id != root_id or proof.npc_author_id != target.get("author_id")
+            ):
+                raise PermanentRejection(
+                    "Reply differs from its persisted continuation coordinates"
+                )
             payload.update(reply_to_post_id=post_id, root_post_id=root_id)
         lock = await self._read_preflight("/feed/lock", wait_for_pacing=True)
         if not isinstance(lock, dict) or not isinstance(lock.get("locked"), bool):
@@ -314,10 +407,22 @@ class ReplyExecutor:
             if lock.get("reason") == "competition_ended":
                 raise PermanentRejection("Competition has ended")
             raise SafeRetry(60)
+        validated_continuation = await self._revalidate_continuation(intent)
         try:
             await self.transport.pacer.reserve("publish")
         except RequestDeferred as error:
             raise SafeRetry(error.seconds) from None
+        if validated_continuation is not None:
+            try:
+                current = (
+                    await self.continuation_for_action(intent.id)
+                    if self.continuation_for_action is not None
+                    else None
+                )
+            except ValueError:
+                raise PermanentRejection("Persisted continuation authority is invalid") from None
+            if current != validated_continuation:
+                raise PermanentRejection("Continuation authority changed before publication")
         # Time may have advanced while waiting for the durable budget or target read.
         self._require_enabled()
         self._require_session_active(session)

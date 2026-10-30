@@ -36,6 +36,9 @@ class Settings(BaseSettings):
         default=None, validation_alias="CTN_SIDE"
     )
     ctn_network_enabled: bool = Field(default=False, validation_alias="CTN_NETWORK_ENABLED")
+    ctn_publish_min_interval_seconds: float = Field(
+        default=20, ge=20, le=300, validation_alias="CTN_PUBLISH_MIN_INTERVAL_SECONDS"
+    )
     ctn_max_total_accounts: int | None = Field(
         default=None, ge=1, validation_alias="CTN_MAX_TOTAL_ACCOUNTS"
     )
