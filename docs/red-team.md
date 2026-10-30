@@ -30,6 +30,13 @@ Arbitrary model prose and source quotations never become published text. Fifty
 editorial lenses provide functional variety without inventing human identities,
 professional credentials, lived experiences or demographic profiles.
 
+`RED_SELECTOR_MODE=reviewed` selects those same reviewed arguments and sources
+locally using topic relevance and stable account/context hashes. This is the
+current deployment: it removes model calls from the finite selection step and
+retains the renderer, source freshness checks and publication quotas. The
+default `llm` mode retains organiser-model selection. Neither mode generates free
+prose. Source text cannot become instructions or published quotations.
+
 Original posts use internal `post:ACCOUNT:SLOT` planning keys and the verified
 SDK `kind=post` contract. Replies/comments use `kind=reply`. Optional
 `RED_ALLOW_THREADS=true` accepts NPC replies only after every ancestor, up to
@@ -170,9 +177,17 @@ RED_SESSIONS_JSON='[{"account_id":10,"token":"PRIVATE_SESSION_TOKEN","expires_at
 
 Use actual verified IDs/tokens and the server-provided expiry. Do not paste the
 list into shell command arguments, terminal output, Git, or chat. At startup
-each token must identify its configured account and expected team through
-`/auth/me`; no actions can execute until all identities pass. Known session
-expiry and the campaign deadline are checked again immediately before a reply.
+each usable token must identify its configured account and expected team through
+`/auth/me`. Expired sessions and authentication rejections are quarantined in
+Postgres; verified healthy accounts continue. Identity mismatch still fails the
+worker. Authentication rejection alone is not proof of an account ban. Known
+session expiry and the campaign deadline are checked again immediately before a reply.
+
+Inspect controls with `botfluencer red accounts`. To disable an identified account,
+use `botfluencer red quarantine --account ID --reason operator_disabled` with the
+private red environment. Quarantine persists across restarts, fails that account's
+queued work, and preserves unknown outcomes and campaign history. It does not
+replace accounts, lift platform bans, or reassign ambiguous work.
 
 ## Start, pause, and inspect
 

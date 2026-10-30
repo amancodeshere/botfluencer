@@ -79,12 +79,17 @@ model-versioned evidence. `blue_reports` deduplicates team/post intents across
 namespaces and models, separate from the mock publishing action ledger.
 `blue_team_controls` persists reporting blocks. Reports recover interrupted
 attempts to unknown rather than reissuing them. A separate team lock spans claim
-and submission. Ordinary publishing remains unavailable.
+and submission; `blue_report_attempts` counts every claimed submission, including
+safe deferrals. Cursor history persists across catch-up cycles to detect loops.
+Ordinary publishing remains unavailable.
 
 The resident workstation service defaults to collection/shadow scoring. Reports
 require private account authentication and opt-in; automatic approval additionally
 requires independent real-label evaluation. Moderator outcome ingestion is
 manual until its authenticated payload contract can be verified. See blue-team.md.
+Model manifests checksum-bind training provenance. Own published controls and
+synthetic examples support training and diagnostics but cannot validate automatic
+reporting. Report identity is verified against the configured account and team.
 
 ## Bounded red campaign
 
@@ -100,8 +105,9 @@ unverified posts never establish identity, conflicting player labels are exclude
 and own accounts cannot be targets. A fresh target read must confirm a top-level
 NPC post before a reply. No mentions or human-root threads are permitted. Curated
 civic arguments use public topic matching without inferring personal traits.
-Expanded mode uses the organiser model only to select finite reviewed angles,
-styles and source IDs; no free model prose crosses the publishing boundary.
+Expanded mode selects finite reviewed angles, styles and source IDs. Selection
+can use the organiser model or deterministic local topic routing; no free model
+prose crosses the publishing boundary.
 Private news snapshots refresh hourly and expire after six hours. A bounded
 background planner keeps a small queue while the sole owner dispatches actions.
 Skip decisions persist independently of prompt versions so irrelevant or already
@@ -109,6 +115,9 @@ contacted observations advance. Explicit paused/drained expansions append an
 audit revision before adding accounts or increasing caps; deadlines never reset.
 
 Account sessions must match the configured team through authenticated `/auth/me`.
+Durable `red_account_controls` quarantines unavailable sessions while healthy
+accounts continue. Queued work for disabled accounts fails; unknown and in-flight
+work, campaign membership and historical own-account exclusions remain intact.
 The SDK reply contract uses `POST /posts`; there is no idempotency guarantee.
 Timeouts, 5xx, interrupted calls and malformed acknowledgements remain unknown;
 only explicit pre-call deferrals and 429 responses allow safe retry. The fixed

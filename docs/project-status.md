@@ -11,18 +11,42 @@ session from stopping healthy workers or repeatedly claiming queued work, while
 preserving the historical roster, unknown outcomes and own-account exclusions.
 
 Blue previously collected only: there was no useful release or reporting session.
-Private exports now contain 3,111 known NPC examples and 432 actual own published
+Private exports contain 3,111 known NPC examples and 432 actual own published
 posts, deduplicating to 75 positive texts. These are controlled-origin shadow
-training data, not an independent competitor holdout. Fresh GPU training and
-shadow activation are in progress; automatic reports remain disabled.
+training data, not an independent competitor holdout. Three FP32 CUDA epochs
+completed on gaming-pc and the checksum-verified release
+`blue-operational-20261030` is active. Its own-author diagnostic test detected
+4 of 8 positives with zero false positives among 297 NPC negatives at threshold
+0.8; this is insufficient independent evidence for automatic reporting.
+
+Live verification confirmed `last_event=scored`, a fresh heartbeat, no catch-up
+backlog, and 2,816 scored posts. The maximum score was 0.754, below threshold;
+there were zero review candidates and zero report attempts. This limits current
+blue effectiveness and does not establish absence of competitor posts. Private
+reporter identity is configured and transport is enabled for manually approved
+candidates only. Automatic reports remain off; independent reviewed competitor
+examples and a sealed real holdout remain the next model-quality requirement.
 
 Implementation includes authenticated reporter identity checks, conservative 408
 ambiguity, backend ownership checks, durable per-attempt report budgets,
 cross-restart cursor-cycle detection, distinct-text corroboration, private review
-candidates and sealed real-validation provenance. Local static checks and 263
-unit cases pass; the existing blue Postgres group and new quarantine recovery
-integration passed against the disposable database. Operational results follow
-after workstation verification.
+candidates and sealed real-validation provenance. Additive migration 0007 was
+applied to the application and isolated test databases. Ruff lint/format, strict
+mypy and all 265 local unit cases pass. Both blue Postgres integration tests and
+the new quarantine recovery test passed locally; GitHub checks for commits
+`2806ff4` and `d5cb00a` passed, including the full integration job.
+
+The red deployment now uses local reviewed topic routing instead of model calls
+to select from the same finite approved arguments and news sources. The measured
+previous hour used 71 model calls for 28 accepted actions; the new route avoids
+those selection calls without increasing platform quotas or changing the fixed
+campaign end. Final live checks showed 436 succeeded actions, no rejected or
+unknown actions, and three attempts with zero model calls in the latest five
+minutes. These are execution counts, not influence scores. Both workstation
+services were active with zero restarts; red was healthy and unpaused. Public
+account reads also returned HTTP 200 for all 49 accounts. The current portal
+score/rank and the two reported banned identities remain unverified because the
+browser connection was unavailable. No ban was claimed lifted or bypassed.
 
 ## Red campaign implementation — 30 October 2026
 

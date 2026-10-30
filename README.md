@@ -59,7 +59,8 @@ serializes integration runs. Read [operations](docs/operations.md) for details.
 ## Team references
 
 - [Blue-team workflow](docs/blue-team.md): private training notebooks, scheduled feed/scoring,
-  author evidence, and opt-in moderation reports.
+  author evidence, and opt-in moderation reports. A trained workstation model now
+  scores live posts; reporting requires manual approval pending independent evaluation.
 - [Red-team workflow](docs/red-team.md): a bounded NPC-only campaign hosted on gaming-pc,
   private account sessions, team-wide deduplication, and durable stop controls.
 - [GPU workstation](docs/gaming-pc.md): gaming-pc SSH, Mamba, CUDA, and local training checks.
