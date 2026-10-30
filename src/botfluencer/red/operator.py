@@ -19,6 +19,7 @@ async def amend(settings: Settings, config: RedSettings, reason: str) -> dict[st
     try:
         if not await store.is_paused():
             raise ValueError("Pause and stop the existing service before expanding")
+        historical = await store.historical_accounts()
         executor = ReplyExecutor(
             transport,
             config.sessions(settings),
@@ -26,10 +27,13 @@ async def amend(settings: Settings, config: RedSettings, reason: str) -> dict[st
             expected_team_id=config.expected_team_id,
             ends_at=config.ends_at,
             enabled=config.enable_replies,
+            disabled_accounts=(await store.disabled_accounts()) & historical,
+            quarantine=store.quarantine,
+            own_author_ids=frozenset(int(account) for account in historical),
         )
         async with asyncio.timeout(config.identity_timeout_seconds):
             await executor.verify_sessions()
-            return await store.amend(reason)
+            return await store.amend(reason, verified_accounts=executor._verified_accounts)
     finally:
         await transport.close()
         await database.close()

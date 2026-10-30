@@ -60,8 +60,11 @@ model/prompt/context digest. Default curated operation remains available.
 
 An explicitly requested expansion uses `red amend --reason TEXT` while paused and
 drained. Newly supplied account sessions are verified first, then an additive
-revision records old/new account sets and attempt caps. Accounts may only be
-added and caps may only increase. Namespace, archive, start/end times, prior
+revision records old/new historical account sets and attempt caps. Historical
+accounts may only be added and caps may only increase. Current sessions may omit
+historical accounts only after durable quarantine; their identities remain in
+the campaign history and own-author exclusions. Every new session must pass
+account/team verification. Namespace, archive, start/end times, prior
 attempts, unknown outcomes and target reservations remain intact. Ordinary
 startup still rejects unreviewed configuration replacement.
 
@@ -163,6 +166,20 @@ username and password with status `registering`; acknowledged token/account IDs
 are saved before identity verification. Existing recovery files are refused,
 and an ambiguous registration is never repeated. The service does not create
 accounts at startup.
+
+Registration additionally requires `--current-total N --current-active N` from
+the current team portal, including accounts outside this controller. The requested
+batch must fit remaining total and active headroom. The server remains
+authoritative if the snapshot changes. An existing campaign's database-clock
+deadline is checked before recovery-file creation and each registration/identity
+request. Banned IDs are never deleted or reused, and uncertain registrations are
+not repeated. For example, with freshly verified counts, use:
+
+```sh
+botfluencer-workstation --env-file /home/aman/.config/botfluencer/red.env \
+  botfluencer red provision --team-id TEAM_ID --count COUNT \
+  --current-total REGISTERED --current-active ACTIVE --output PRIVATE_PATH
+```
 
 After all entries have status `verified`, transform the recovery envelope's
 `accounts` array into a **JSON list** retaining only `account_id`, `token`, and

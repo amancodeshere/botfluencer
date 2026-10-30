@@ -17,6 +17,16 @@ work blocking healthy accounts. Independent review found no blocking issues.
 Two new unit tests and four dedicated-Postgres integration cases passed, including
 both deterministic lock orders and unknown/in-flight history preservation.
 
+Replacement support now separates current sessions from append-only campaign
+history without relaxing active-account configuration limits. Amendments require
+verified new identities and durable quarantine for omitted historical IDs. Own-ID
+exclusions retain the full history. Provisioning validates explicit portal counts
+against remaining headroom and checks the database-clock deadline before creating
+credentials and before each HTTP call. Issued tokens survive malformed account
+acknowledgements for private recovery. Independent review is clean; all 292 unit
+tests and three new Postgres replenishment cases pass. Live provisioning and
+deployment verification follow separately.
+
 ## Blue operational delivery — 30 October 2026
 
 The user requested deployment of the planned blue initiative and investigation

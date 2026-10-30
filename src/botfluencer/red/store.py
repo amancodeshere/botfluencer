@@ -34,6 +34,14 @@ class RedStore(Repository):
     config: RedSettings
     scope: str
 
+    async def historical_accounts(self) -> set[str]:
+        """Return every account ever admitted to this team's campaign."""
+        async with self.db.sessions() as session:
+            campaign = await session.get(RedCampaign, self.scope)
+            if campaign is None:
+                raise ValueError("An existing campaign is required")
+            return set(campaign.accounts)
+
     async def disabled_accounts(self) -> set[str]:
         async with self.db.sessions() as session:
             return set(
@@ -91,7 +99,9 @@ class RedStore(Repository):
                     )
                 )
 
-    async def amend(self, reason: str) -> dict[str, int]:
+    async def amend(
+        self, reason: str, *, verified_accounts: set[str] | None = None
+    ) -> dict[str, int]:
         if not reason.strip() or len(reason) > 500:
             raise ValueError("An explicit bounded revision reason is required")
         async with self.db.sessions.begin() as session:
@@ -109,12 +119,25 @@ class RedStore(Repository):
             )
             if any(getattr(campaign, k) != v for k, v in immutable.items()):
                 raise ValueError("Expansion must preserve namespace, window and archive")
-            accounts = sorted(self.settings.accounts)
-            if (
-                not set(campaign.accounts) <= set(accounts)
-                or self.config.max_attempts < campaign.max_attempts
-            ):
-                raise ValueError("Expansion cannot remove accounts or lower the recorded cap")
+            now = cast(datetime, await session.scalar(select(func.clock_timestamp())))
+            if now >= campaign.ends_at:
+                raise ValueError("The campaign deadline has passed")
+            previous = set(campaign.accounts)
+            configured = set(self.settings.accounts)
+            disabled = set(
+                await session.scalars(
+                    select(RedAccountControl.account).where(
+                        RedAccountControl.scope == self.scope, RedAccountControl.disabled.is_(True)
+                    )
+                )
+            )
+            if not previous - configured <= disabled:
+                raise ValueError("Omitted historical accounts must be durably disabled")
+            if not configured - previous <= set(verified_accounts or ()):
+                raise ValueError("Every new account must have a verified account and team identity")
+            if self.config.max_attempts < campaign.max_attempts:
+                raise ValueError("Expansion cannot lower the recorded cap")
+            accounts = sorted(previous | configured)
             in_flight = await session.scalar(
                 select(Action.id)
                 .where(Action.namespace == self.namespace, Action.status == "in_flight")
@@ -200,15 +223,31 @@ class RedStore(Repository):
         )
         async with self.db.sessions.begin() as session:
             await session.execute(insert(RedCampaign).values(**values).on_conflict_do_nothing())
-            campaign = await session.get(RedCampaign, self.scope)
+            campaign = await session.scalar(
+                select(RedCampaign).where(RedCampaign.scope == self.scope).with_for_update()
+            )
             if campaign is None or any(
-                getattr(campaign, key) != value for key, value in values.items()
+                getattr(campaign, key) != value
+                for key, value in values.items()
+                if key != "accounts"
             ):
                 raise ValueError(
                     "Persisted campaign differs; deadline and mandate cannot be replaced"
                 )
+            configured = set(self.settings.accounts)
+            historical = set(campaign.accounts)
+            disabled = set(
+                await session.scalars(
+                    select(RedAccountControl.account).where(
+                        RedAccountControl.scope == self.scope, RedAccountControl.disabled.is_(True)
+                    )
+                )
+            )
+            if not configured <= historical or not historical - configured <= disabled:
+                raise ValueError("Roster changes require a paused, verified campaign amendment")
 
     async def npc_ids(self) -> frozenset[int]:
+        own = {int(account) for account in await self.historical_accounts()}
         async with self.db.sessions() as session:
             rows = list(
                 await session.scalars(
@@ -230,7 +269,7 @@ class RedStore(Repository):
                     .distinct()
                 )
             )
-            return frozenset(set(rows) - players - {int(a) for a in self.settings.accounts})
+            return frozenset(set(rows) - players - own - {int(a) for a in self.settings.accounts})
 
     def key(self, external_id: str) -> str:
         return hashlib.sha256(f"{self.scope}:{self.namespace}:{external_id}".encode()).hexdigest()

@@ -33,6 +33,10 @@ class RedWorker(Worker):
             await self.store.initialize()
             self.executor.disabled_accounts = await self.store.disabled_accounts()
             self.executor.quarantine = self.store.quarantine
+            self.executor._own_author_ids = frozenset(
+                int(account)
+                for account in await self.store.historical_accounts() | set(self.settings.accounts)
+            )
             self.executor.npc_author_ids = await self.store.npc_ids()
             if not self.executor.npc_author_ids:
                 raise ValueError("Reviewed NPC source archive is empty")

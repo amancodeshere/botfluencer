@@ -116,6 +116,14 @@ Skip decisions persist independently of prompt versions so irrelevant or already
 contacted observations advance. Explicit paused/drained expansions append an
 audit revision before adding accounts or increasing caps; deadlines never reset.
 
+The campaign account array is historical and append-only. The configured session
+roster stays within the active allowance; historical IDs may be omitted only
+after durable quarantine. Historical own IDs remain excluded from NPC targets and
+blue detection. Audited amendments authenticate every new ID before extending
+history. Provisioning requires current total/active counts, checks cumulative
+headroom and the existing campaign deadline, and retains partial credentials
+without repeating ambiguous registrations.
+
 Account sessions must match the configured team through authenticated `/auth/me`.
 Durable `red_account_controls` quarantines unavailable sessions while healthy
 accounts continue. Queued work for disabled accounts fails; unknown and in-flight

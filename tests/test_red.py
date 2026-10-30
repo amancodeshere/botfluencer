@@ -467,8 +467,14 @@ async def test_registration_private_recovery_and_no_retry(
         CTN_MAX_TOTAL_ACCOUNTS=4,
         CTN_MAX_ACTIVE_ACCOUNTS=4,
     )
-    database = SimpleNamespace(settings=settings, close=AsyncMock())
-    pacer = SimpleNamespace(reserve=AsyncMock(), observe=AsyncMock())
+    from contextlib import asynccontextmanager
+
+    @asynccontextmanager
+    async def sessions():
+        yield SimpleNamespace(execute=AsyncMock(return_value=SimpleNamespace(first=lambda: None)))
+
+    database = SimpleNamespace(settings=settings, sessions=sessions, close=AsyncMock())
+    pacer = SimpleNamespace(scope="synthetic-team", reserve=AsyncMock(), observe=AsyncMock())
     monkeypatch.setattr(module, "Database", lambda _: database)
     monkeypatch.setattr(module, "TeamPacer", lambda _: pacer)
     monkeypatch.setattr(module, "require_open", lambda *args: None)
@@ -483,11 +489,15 @@ async def test_registration_private_recovery_and_no_retry(
         ),
     )
     if outcome == "success":
-        summary = await module.provision(settings, path, 1, expected_team_id=99)
+        summary = await module.provision(
+            settings, path, 1, expected_team_id=99, current_total=0, current_active=0
+        )
         assert summary == {"requested": 1, "registered": 1, "verified": 1, "account_ids": [10]}
     else:
         with pytest.raises(RuntimeError, match="inspect the private recovery file"):
-            await module.provision(settings, path, 1, expected_team_id=99)
+            await module.provision(
+                settings, path, 1, expected_team_id=99, current_total=0, current_active=0
+            )
     assert sum(request.method == "POST" for request in requests) == 1
     saved = json.loads(path.read_text())
     assert (
@@ -502,5 +512,7 @@ async def test_registration_private_recovery_and_no_retry(
     )
     database.close.assert_awaited_once()
     with pytest.raises(ValueError, match="already exists"):
-        await module.provision(settings, path, 1, expected_team_id=99)
+        await module.provision(
+            settings, path, 1, expected_team_id=99, current_total=0, current_active=0
+        )
     assert sum(request.method == "POST" for request in requests) == 1

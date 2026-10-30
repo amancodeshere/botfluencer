@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+from sqlalchemy import func, select
 
 from botfluencer.competition.errors import RequestDeferred
 from botfluencer.competition.pacing import TeamPacer
@@ -22,6 +23,7 @@ from botfluencer.competition.standards import SOCIAL_URL, require_open
 from botfluencer.competition.transport import CompetitionTransport
 from botfluencer.config import Settings
 from botfluencer.storage.database import Database
+from botfluencer.storage.models import RedCampaign
 
 
 def _positive_id(value: object) -> int:
@@ -95,7 +97,14 @@ async def _headers(transport: CompetitionTransport, response: httpx.Response, bu
     )
 
 
-def _prepare(output: Path, count: int, expected_team_id: int) -> tuple[Path, dict[str, Any]]:
+def _prepare(
+    output: Path,
+    count: int,
+    expected_team_id: int,
+    *,
+    current_total: int,
+    current_active: int,
+) -> tuple[Path, dict[str, Any]]:
     project = Path(__file__).resolve().parents[3]
     path = output.expanduser().absolute()
     if path.is_symlink() or path.exists():
@@ -116,11 +125,28 @@ def _prepare(output: Path, count: int, expected_team_id: int) -> tuple[Path, dic
     state: dict[str, Any] = {
         "version": 1,
         "expected_team_id": expected_team_id,
+        "current_total": current_total,
+        "current_active": current_active,
         "created_at": datetime.now(UTC).isoformat(),
         "accounts": entries,
     }
     _save(path, state, initial=True)
     return path, state
+
+
+async def _require_campaign_current(database: Database, scope: str) -> None:
+    """An existing team's immutable campaign deadline also bounds replenishment."""
+    async with asyncio.timeout(database.settings.operation_timeout_seconds):
+        async with database.sessions() as session:
+            row = (
+                await session.execute(
+                    select(RedCampaign.ends_at, func.clock_timestamp()).where(
+                        RedCampaign.scope == scope
+                    )
+                )
+            ).first()
+            if row is not None and row[1] >= row[0]:
+                raise ValueError("The existing campaign deadline has passed")
 
 
 async def provision(
@@ -129,6 +155,8 @@ async def provision(
     count: int = 4,
     *,
     expected_team_id: int,
+    current_total: int,
+    current_active: int,
 ) -> dict[str, Any]:
     """Create a bounded set of neutral simulation accounts; return IDs/counts only."""
     if not settings.ctn_network_enabled or settings.ctn_team_code is None:
@@ -136,26 +164,46 @@ async def provision(
     require_open()
     _positive_id(expected_team_id)
     if (
+        not isinstance(current_total, int)
+        or isinstance(current_total, bool)
+        or not isinstance(current_active, int)
+        or isinstance(current_active, bool)
+        or not 0 <= current_active <= current_total
+    ):
+        raise ValueError("Supply verified nonnegative total and active account counts")
+    if (
         not isinstance(count, int)
         or isinstance(count, bool)
         or count < 1
         or settings.ctn_max_total_accounts is None
         or settings.ctn_max_active_accounts is None
-        or count > min(settings.ctn_max_total_accounts, settings.ctn_max_active_accounts)
+        or count > settings.ctn_max_total_accounts - current_total
+        or count > settings.ctn_max_active_accounts - current_active
     ):
         raise ValueError("Registration count must fit the verified account allowances")
-    path, state = _prepare(output, count, expected_team_id)
-    entries: list[dict[str, Any]] = state["accounts"]
     database: Database | None = None
     transport: CompetitionTransport | None = None
     current: dict[str, Any] | None = None
+    prepared = False
     try:
         database = Database(settings)
-        transport = CompetitionTransport(settings, TeamPacer(database))
+        pacer = TeamPacer(database)
+        await _require_campaign_current(database, pacer.scope)
+        path, state = _prepare(
+            output,
+            count,
+            expected_team_id,
+            current_total=current_total,
+            current_active=current_active,
+        )
+        prepared = True
+        entries: list[dict[str, Any]] = state["accounts"]
+        transport = CompetitionTransport(settings, pacer)
         for entry in entries:
             current = entry
             await _reserve(transport, "auth")
             require_open(transport.clock())
+            await _require_campaign_current(database, pacer.scope)
             entry["status"] = "registering"
             _save(path, state)
             response = await transport.client.post(
@@ -179,6 +227,15 @@ async def provision(
                 await _headers(transport, response, "auth")
                 raise RuntimeError("Registration was not accepted")
             data: Any = response.json()
+            if (
+                isinstance(data, dict)
+                and isinstance(data.get("token"), str)
+                and data["token"].strip()
+            ):
+                # A malformed account acknowledgement can still contain an issued
+                # credential. Retain it privately without trusting the account ID.
+                entry["token"] = data["token"]
+                _save(path, state)
             if (
                 not isinstance(data, dict)
                 or not isinstance(data.get("account"), dict)
@@ -204,6 +261,8 @@ async def provision(
             # Retain the conservative 13-second spacing even if headers advertise 12.
             await transport.pacer.observe("auth", retry_after=13)
             await _reserve(transport, "other_read")
+            require_open(transport.clock())
+            await _require_campaign_current(database, pacer.scope)
             identity = await transport.client.get(
                 SOCIAL_URL + "/auth/me",
                 headers={"Authorization": "Bearer " + entry["token"], "Accept": "application/json"},
@@ -223,11 +282,17 @@ async def provision(
             entry["status"] = "verified"
             _save(path, state)
     except BaseException as error:
+        if not prepared and isinstance(error, ValueError):
+            raise
         if current is not None and current["status"] == "registering":
             current["status"] = "unknown"
             _save(path, state)
         if isinstance(error, asyncio.CancelledError):
             raise
+        if not prepared:
+            raise RuntimeError(
+                "Account provisioning preflight stopped before registration"
+            ) from None
         raise RuntimeError(
             "Account provisioning stopped; inspect the private recovery file"
         ) from None

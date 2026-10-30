@@ -50,6 +50,7 @@ class ReplyExecutor:
         allow_threads: bool = False,
         disabled_accounts: set[str] | None = None,
         quarantine: Callable[[str, str], Awaitable[None]] | None = None,
+        own_author_ids: frozenset[int] | None = None,
     ) -> None:
         if ends_at.utcoffset() is None:
             raise ValueError("Reply execution deadline requires an explicit timezone")
@@ -73,7 +74,9 @@ class ReplyExecutor:
                 raise ValueError("Session expiry requires an explicit timezone")
         if set(self.sessions) != set(self.transport.settings.accounts):
             raise ValueError("Reply sessions must match all configured accounts")
-        own_ids = {session.account_id for session in self.sessions.values()}
+        own_ids = {session.account_id for session in self.sessions.values()} | {
+            _positive_id(value) for value in own_author_ids or ()
+        }
         self._own_author_ids = frozenset(own_ids)
         if self.npc_author_ids & own_ids:
             raise ValueError("Own competition accounts cannot be NPC targets")
@@ -208,7 +211,11 @@ class ReplyExecutor:
             author_id = _positive_id(target.get("author_id"))
             root = target.get("root_post_id")
             root_id = _positive_id(post_id if root is None else root)
-            if str(post_id) != target_id or author_id not in self.npc_author_ids:
+            if (
+                str(post_id) != target_id
+                or author_id not in self.npc_author_ids
+                or author_id in self._own_author_ids
+            ):
                 raise ValueError("Reply target must be a confirmed organiser NPC")
             if target.get("kind") == "post":
                 if target.get("reply_to_post_id") is not None or root_id != post_id:

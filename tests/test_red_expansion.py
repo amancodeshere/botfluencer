@@ -455,7 +455,10 @@ async def test_audited_expansion_preserves_deadline_history_and_target_reservati
     await store.set_paused(True)
     store.settings.accounts = ["10", "11"]
     store.config = store.config.model_copy(update={"max_attempts": 20})
-    assert await store.amend("Synthetic reviewed expansion") == {"accounts": 2, "max_attempts": 20}
+    assert await store.amend("Synthetic reviewed expansion", verified_accounts={"11"}) == {
+        "accounts": 2,
+        "max_attempts": 20,
+    }
     await store.initialize()
     assert (await store.summary())["counts"] == before["counts"]
     assert (await store.summary())["action_statuses"] == {"unknown": 1}
@@ -522,7 +525,7 @@ async def test_expansion_rejects_inflight_actions_and_retains_attempt_history(re
     store.settings.accounts = ["10", "11"]
     store.config = store.config.model_copy(update={"max_attempts": 20})
     with pytest.raises(ValueError, match="in-flight"):
-        await store.amend("Synthetic expansion before draining")
+        await store.amend("Synthetic expansion before draining", verified_accounts={"11"})
     async with repo.db.sessions() as session:
         saved = await session.scalar(select(Action).where(Action.id == action.id))
         assert saved.status == "in_flight" and saved.attempts == 1

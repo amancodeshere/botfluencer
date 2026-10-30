@@ -77,6 +77,8 @@ def main() -> None:
     provision.add_argument("--output", required=True)
     provision.add_argument("--count", type=int, default=4)
     provision.add_argument("--team-id", type=int, required=True)
+    provision.add_argument("--current-total", type=int, required=True)
+    provision.add_argument("--current-active", type=int, required=True)
     check = commands.add_parser(
         "doctor", help="Validate baseline setup without exposing credentials"
     )
@@ -166,6 +168,8 @@ def main() -> None:
                                 Path(args.output),
                                 args.count,
                                 expected_team_id=args.team_id,
+                                current_total=args.current_total,
+                                current_active=args.current_active,
                             )
                         )
                     )
