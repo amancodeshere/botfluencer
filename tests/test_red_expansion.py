@@ -432,7 +432,9 @@ async def planned_action(store):
     from botfluencer.domain import ObservationInput
     from botfluencer.red.store import DISPATCHER, PROMPT_VERSION, STRATEGY_VERSION
 
-    await store.observe([ObservationInput(external_id="123", text="Synthetic referendum")])
+    await store.observe(
+        [ObservationInput(external_id="123", text="Synthetic referendum", source="social")]
+    )
     item = await store.unplanned(DISPATCHER, STRATEGY_VERSION, PROMPT_VERSION)
     assert item is not None
     assert await store.plan_reply(item.id, 7, "10", Draft(target_id="123", text="Synthetic reply"))

@@ -32,15 +32,17 @@ async def test_dispatcher_prioritizes_recent_backlog_and_preserves_old_rows_and_
     await store.initialize()
     older_ids = [str(identity) for identity in range(100, 116)]
     original_id = "post:10:1234"
+    orphan_id = "post:10:1111"
     await store.observe(
         [
             *[
-                ObservationInput(external_id=identity, text="Old referendum")
+                ObservationInput(external_id=identity, text="Old referendum", source="social")
                 for identity in older_ids
             ],
-            ObservationInput(external_id=original_id, text="Original referendum"),
-            ObservationInput(external_id="200", text="Fresh first referendum"),
-            ObservationInput(external_id="201", text="Fresh second referendum"),
+            ObservationInput(external_id=original_id, text="Original referendum", source="news"),
+            ObservationInput(external_id=orphan_id, text="Orphan news draft", source="news"),
+            ObservationInput(external_id="200", text="Fresh first referendum", source="social"),
+            ObservationInput(external_id="201", text="Fresh second referendum", source="social"),
         ]
     )
     original = await store.find_observation(original_id)
@@ -60,6 +62,7 @@ async def test_dispatcher_prioritizes_recent_backlog_and_preserves_old_rows_and_
         for identity, age in [
             ("100", timedelta(hours=6)),
             (original_id, timedelta(minutes=3)),
+            (orphan_id, timedelta(minutes=4)),
             ("200", timedelta(minutes=2)),
             ("201", timedelta(minutes=1)),
         ]:
@@ -94,7 +97,9 @@ async def test_dispatcher_prioritizes_recent_backlog_and_preserves_old_rows_and_
     assert generic is not None and generic.external_id == "100"
     assert (await store.summary())["counts"] == before["counts"]
     assert await observation_history() == history
-    assert len(history) == 19
+    assert len(history) == 20
+    orphan = await store.find_observation(orphan_id)
+    assert orphan is not None and orphan.payload["source"] == "news"
     assert await store.unknown() == [action]
     await store.skip(fresh.id, fresh.external_id, "Synthetic reviewed skip")
     following = await store.unplanned(DISPATCHER, STRATEGY_VERSION, PROMPT_VERSION)
@@ -106,3 +111,5 @@ async def test_dispatcher_prioritizes_recent_backlog_and_preserves_old_rows_and_
     assert older is not None and older.external_id == "100"
     assert await store.unknown() == [action]
     assert await observation_history() == history
+    retained_orphan = await store.find_observation(orphan_id)
+    assert retained_orphan is not None and retained_orphan.id == orphan.id

@@ -116,8 +116,7 @@ locale-independent ASCII matching skips irrelevant ASCII rows, while multibyte
 text passes through for the authoritative Python eligibility check. Filtered
 rows are not marked processed. This avoids newer unrelated posts hiding relevant
 NPC discussion farther down the archive.
-The
-blue collector must continue collecting into the configured archive; once its
+The blue collector must continue collecting into the configured archive; once its
 posts age past four hours the red worker safely idles.
 
 Dispatcher selection prioritizes observations discovered in the past four hours,
@@ -125,6 +124,9 @@ then preserves FIFO order within recent and older tiers. Source age is still
 validated separately: ingestion time does not establish source freshness.
 Older rows remain in the ledger and become selectable after recent work; a
 historical backlog cannot take every reply turn ahead of newly discovered work.
+This dispatcher queue selects only social observations. Original drafts use their
+exact-key lookup and never enter reply selection; orphan news drafts remain
+available for audit without consuming reply scans.
 
 Postgres commits each team-wide target reservation and action intent together,
 before execution. The same post cannot receive another planned reply across accounts or

@@ -301,7 +301,12 @@ class RedStore(Repository):
             )
             result = await session.scalar(
                 select(Observation)
-                .where(Observation.namespace == self.namespace, ~planned)
+                .where(
+                    Observation.namespace == self.namespace,
+                    # Originals use find_observation with their exact internal key.
+                    Observation.payload["source"].as_string() == "social",
+                    ~planned,
+                )
                 .order_by(
                     # Prefer recent discovery without hiding older audit history.
                     (Observation.observed_at >= func.now() - timedelta(hours=4)).desc(),

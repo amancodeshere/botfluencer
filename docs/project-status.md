@@ -62,6 +62,13 @@ adds deduplicated expiry decisions only after positively parsing an aware source
 timestamp and comparing it with database time; it does not delete or mutate
 observations, actions, outcomes or target reservations.
 
+The dispatcher reply query also excludes news observations; originals retain their
+exact-key lookup. A backlog of 97 unfinished news drafts had otherwise continued
+to consume reply scans after social cleanup. The updated regression covers orphan
+news retention, source-specific reply selection, generic FIFO and unknown-history
+preservation. All 315 unit cases and the focused Postgres case pass. GitHub checks
+for `d0405aa` (46 integration cases) and `2a688e4` (47 cases) passed in full.
+
 ## Blue operational delivery — 30 October 2026
 
 The user requested deployment of the planned blue initiative and investigation
