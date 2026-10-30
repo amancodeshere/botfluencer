@@ -69,6 +69,15 @@ news retention, source-specific reply selection, generic FIFO and unknown-histor
 preservation. All 315 unit cases and the focused Postgres case pass. GitHub checks
 for `d0405aa` (46 integration cases) and `2a688e4` (47 cases) passed in full.
 
+NPC reply execution was restored and both kinds received matching live receipts.
+The first alternating pair exposed another throughput cost: planning began only
+after publication finished. Bounded prefetch now begins after the durable claim
+and before awaiting execution, so preparation can overlap the one publisher.
+Queue capacity includes in-flight work; pause, deadline and recovery checks stay
+intact. Astra and independent review are clean; six event-driven overlap/capacity
+cases and all 321 unit tests pass. The preceding complete 47-case integration CI
+also passed; this scheduling change makes no database/schema changes.
+
 ## Blue operational delivery — 30 October 2026
 
 The user requested deployment of the planned blue initiative and investigation

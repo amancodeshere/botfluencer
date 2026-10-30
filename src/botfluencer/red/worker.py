@@ -185,13 +185,13 @@ class RedWorker(Worker):
         active = self.config.starts_at <= self.executor.transport.clock() < self.config.ends_at
         if not self.state.paused and active:
             intent = await self.store.claim()
-            if intent is not None:
-                await self.execute(intent)
             if (
                 self._planner is None
                 and await self.store.pending_count() < self.config.max_pending_actions
             ):
                 self._planner = asyncio.create_task(self.plan_contextual(), name="red-planner")
+            if intent is not None:
+                await self.execute(intent)
         await self.store.heartbeat(self.id)
         self.state.heartbeat_monotonic = time.monotonic()
         event(

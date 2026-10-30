@@ -58,8 +58,11 @@ accepted API embed and the public social interface.
 news front pages hourly. `red refresh-world --output PATH` validates the actual
 article title/summary/URL contract before atomic replacement. Snapshots older
 than six hours block contextual planning. The background planner and dispatcher
-share Postgres ownership, budgets, and a small queue; generated drafts record the
-model/prompt/context digest. Default curated operation remains available.
+share Postgres ownership, budgets, and a small queue. After a durable claim, the
+dispatcher can prepare the next intent while awaiting the current publication;
+only the dispatcher publishes, and in-flight work counts toward queue capacity.
+Generated drafts record the model/prompt/context digest. Default curated
+operation remains available.
 
 An explicitly requested expansion uses `red amend --reason TEXT` while paused and
 drained. Newly supplied account sessions are verified first, then an additive
