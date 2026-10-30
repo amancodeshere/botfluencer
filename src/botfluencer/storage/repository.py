@@ -21,6 +21,8 @@ from botfluencer.storage.models import (
     UsageEvent,
 )
 
+OBSERVATION_BATCH_SIZE = 500
+
 
 class Repository:
     def __init__(self, database: Database) -> None:
@@ -64,16 +66,27 @@ class Repository:
             return control is None or control.paused
 
     async def observe(self, inputs: list[ObservationInput]) -> None:
+        if not inputs:
+            return
+        # Preserve the first payload for duplicates within this call as well as
+        # existing rows, including duplicates that would cross batch boundaries.
+        unique: dict[str, ObservationInput] = {}
+        for item in inputs:
+            unique.setdefault(item.external_id, item)
+        rows = [
+            {
+                "namespace": self.namespace,
+                "external_id": item.external_id,
+                # Keep default fixture payloads readable by the prior runtime.
+                "payload": item.model_dump(exclude_defaults=True),
+            }
+            for item in unique.values()
+        ]
         async with self.db.sessions.begin() as session:
-            for item in inputs:
+            for start in range(0, len(rows), OBSERVATION_BATCH_SIZE):
                 await session.execute(
                     insert(Observation)
-                    .values(
-                        namespace=self.namespace,
-                        external_id=item.external_id,
-                        # Keep default fixture payloads readable by the prior runtime.
-                        payload=item.model_dump(exclude_defaults=True),
-                    )
+                    .values(rows[start : start + OBSERVATION_BATCH_SIZE])
                     .on_conflict_do_nothing(index_elements=["namespace", "external_id"])
                 )
 

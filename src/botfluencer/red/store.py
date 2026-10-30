@@ -57,6 +57,12 @@ class RedStore(Repository):
         }:
             raise ValueError("Use a configured account and a sanitized eligibility reason")
         async with self.db.sessions.begin() as session:
+            # Match planning/amendment/claim lock order. A planner that finishes
+            # first leaves queued work for this transaction to fail; one that
+            # follows quarantine sees the disabled control before reserving work.
+            await session.scalar(
+                select(RedCampaign).where(RedCampaign.scope == self.scope).with_for_update()
+            )
             await session.execute(
                 insert(RedAccountControl)
                 .values(scope=self.scope, account=account, disabled=True, reason=reason)
@@ -334,6 +340,13 @@ class RedStore(Repository):
             )
             if campaign is None:
                 raise RuntimeError("Campaign is not initialized")
+            disabled = await session.scalar(
+                select(RedAccountControl.disabled).where(
+                    RedAccountControl.scope == self.scope, RedAccountControl.account == account
+                )
+            )
+            if disabled:
+                return False
             now = cast(datetime, await session.scalar(select(func.now())))
             if not campaign.starts_at <= now < campaign.ends_at:
                 return False

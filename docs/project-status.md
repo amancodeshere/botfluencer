@@ -1,5 +1,22 @@
 # Project status
 
+## Account recovery and efficiency — 30 October 2026
+
+The user reports current portal counts of 50 registered, nine banned, 200 maximum
+total and 50 maximum active. Eight controlled accounts are durably quarantined
+after publishing authentication rejections. All 49 authenticated read checks still
+returned HTTP 200; this read contract does not expose ban status. The ninth banned
+identity remains unverified. Account recovery must retain historical identities,
+reservations and the existing campaign deadline.
+
+Astra reviewed the runtime before implementation. Observation persistence now
+uses bounded multi-row inserts instead of one round trip per candidate, retaining
+the first payload for duplicate IDs. Campaign-lock ordering closes the race
+between quarantine and planning, so disabled accounts cannot leave new queued
+work blocking healthy accounts. Independent review found no blocking issues.
+Two new unit tests and four dedicated-Postgres integration cases passed, including
+both deterministic lock orders and unknown/in-flight history preservation.
+
 ## Blue operational delivery — 30 October 2026
 
 The user requested deployment of the planned blue initiative and investigation

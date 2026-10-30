@@ -28,7 +28,9 @@ software behavior; they do not estimate citizen persuasion or competition score.
 
 ## Durability and recovery
 
-Observations deduplicate by namespace/external ID. Decision and action keys hash
+Observations deduplicate by namespace/external ID. Inserts use batches of at most
+500 unique IDs and retain the first payload, including repeated input IDs.
+Decision and action keys hash
 namespace, account, observation ID, strategy version, and prompt version. Decision
 and action intent creation is one transaction. Hourly budgets count reserved
 generation calls and action attempts before the respective call is made. Failed
@@ -118,6 +120,8 @@ Account sessions must match the configured team through authenticated `/auth/me`
 Durable `red_account_controls` quarantines unavailable sessions while healthy
 accounts continue. Queued work for disabled accounts fails; unknown and in-flight
 work, campaign membership and historical own-account exclusions remain intact.
+Planning and quarantine serialize on the campaign row before checking account
+eligibility or locking actions, so quarantine cannot leave newly queued work behind.
 The SDK reply contract uses `POST /posts`; there is no idempotency guarantee.
 Timeouts, 5xx, interrupted calls and malformed acknowledgements remain unknown;
 only explicit pre-call deferrals and 429 responses allow safe retry. The fixed
