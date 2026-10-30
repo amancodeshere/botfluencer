@@ -120,6 +120,12 @@ The
 blue collector must continue collecting into the configured archive; once its
 posts age past four hours the red worker safely idles.
 
+Dispatcher selection prioritizes observations discovered in the past four hours,
+then preserves FIFO order within recent and older tiers. Source age is still
+validated separately: ingestion time does not establish source freshness.
+Older rows remain in the ledger and become selectable after recent work; a
+historical backlog cannot take every reply turn ahead of newly discovered work.
+
 Postgres commits each team-wide target reservation and action intent together,
 before execution. The same post cannot receive another planned reply across accounts or
 policy versions. At most one target per NPC author is reserved in any 24-hour

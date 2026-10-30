@@ -302,7 +302,12 @@ class RedStore(Repository):
             result = await session.scalar(
                 select(Observation)
                 .where(Observation.namespace == self.namespace, ~planned)
-                .order_by(Observation.observed_at, Observation.id)
+                .order_by(
+                    # Prefer recent discovery without hiding older audit history.
+                    (Observation.observed_at >= func.now() - timedelta(hours=4)).desc(),
+                    Observation.observed_at,
+                    Observation.id,
+                )
                 .limit(1)
             )
             return result

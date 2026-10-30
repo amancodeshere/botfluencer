@@ -54,6 +54,14 @@ final eligibility. Independent review is clean; 315 unit tests and the additiona
 Postgres discovery case pass. This reduces unnecessary round trips without
 changing publishing permissions, contact limits, or platform quotas.
 
+Live tracing also found thousands of older unplanned observations ahead of fresh
+targets. Dispatcher ordering now prioritizes recent discovery while retaining
+FIFO within each tier and keeping older rows accessible. The regression test
+preserves exact observation history, generic FIFO, and unknown actions. Recovery
+adds deduplicated expiry decisions only after positively parsing an aware source
+timestamp and comparing it with database time; it does not delete or mutate
+observations, actions, outcomes or target reservations.
+
 ## Blue operational delivery — 30 October 2026
 
 The user requested deployment of the planned blue initiative and investigation
