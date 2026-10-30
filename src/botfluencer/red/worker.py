@@ -68,6 +68,7 @@ class RedWorker(Worker):
                     world,
                     max_world_age_hours=self.config.max_world_age_hours,
                     gif_enabled=self.config.gif_enabled,
+                    use_llm=getattr(self.config, "selector_mode", "llm") == "llm",
                 )
                 account = await self.store.next_account()
                 original = await self.store.original_due()
@@ -123,7 +124,11 @@ class RedWorker(Worker):
                             observation.id, item.external_id, "Team contact already reserved"
                         )
                         return
-                if observation is None or not await self.store.reserve_generation(account):
+                if observation is None:
+                    return
+                if getattr(
+                    self.config, "selector_mode", "llm"
+                ) == "llm" and not await self.store.reserve_generation(account):
                     return
                 order = sorted(self.settings.accounts).index(account)
                 draft = await generator.generate(

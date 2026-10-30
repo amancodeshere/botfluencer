@@ -126,6 +126,66 @@ class GeneratedSelection(BaseModel):
     style: Style
 
 
+def reviewed_selection(
+    observation: ObservationInput,
+    account: str,
+    kind: Literal["post", "reply"],
+    world: WorldContext,
+    role: str,
+) -> GeneratedSelection:
+    """Route public topic data to the same finite reviewed output vocabulary."""
+    seed = hashlib.sha256(
+        (account + observation.external_id + world.digest + role).encode()
+    ).digest()
+    sources = [
+        source
+        for source in world.sources
+        if re.search(
+            r"h2d2|vaccin|referendum|mandate|poll|exemption|privacy", source.title, re.IGNORECASE
+        )
+    ] or world.sources
+    words = set(re.findall(r"[a-z]{4,}", observation.text.lower())) - {
+        "kingstonia",
+        "referendum",
+        "this",
+        "that",
+        "with",
+        "from",
+        "have",
+        "been",
+        "will",
+    }
+    source = max(
+        sources,
+        key=lambda source: (
+            len(words & set(re.findall(r"[a-z]{4,}", source.title.lower()))),
+            hashlib.sha256((source.id + seed.hex()).encode()).digest(),
+        ),
+    )
+    angles: tuple[Angle, ...] = ("privacy", "exemptions", "oversight", "access", "preparation")
+    styles: tuple[Style, ...] = ("question", "statement", "invitation")
+    topics = (
+        r"privacy|certificate|data",
+        r"exemption|fairness",
+        r"oversight|transparent|spending|council",
+        r"access|venue|school|ferry",
+        r"prepar|review|shipment",
+    )
+    matches = [
+        angle
+        for angle, pattern in zip(angles, topics, strict=True)
+        if re.search(pattern, observation.text, re.IGNORECASE)
+    ]
+    angle = matches[seed[0] % len(matches)] if matches else angles[seed[0] % len(angles)]
+    return GeneratedSelection(
+        kind=kind,
+        target_id=observation.external_id,
+        source_id=source.id,
+        angle=angle,
+        style=styles[seed[1] % len(styles)],
+    )
+
+
 def _require_target(target_id: str, account: str, kind: Literal["post", "reply"]) -> None:
     if kind == "post":
         valid = re.fullmatch(rf"post:{re.escape(account)}:[0-9]+", target_id)
@@ -198,6 +258,7 @@ class ContextualGenerator:
         *,
         max_world_age_hours: float = 6,
         gif_enabled: bool = False,
+        use_llm: bool = True,
     ) -> None:
         if transport.settings.ctn_side != "Vote Yes":
             raise ValueError("Contextual red policy requires the verified Vote Yes assignment")
@@ -207,6 +268,7 @@ class ContextualGenerator:
         self.world = world
         self.max_world_age_hours = max_world_age_hours
         self.gif_enabled = gif_enabled
+        self.use_llm = use_llm
         self.prompt_version = hashlib.sha256(
             json.dumps(
                 {
@@ -222,6 +284,7 @@ class ContextualGenerator:
                     "place_labels": PLACE_LABELS,
                     "max_world_age_hours": max_world_age_hours,
                     "gif_enabled": gif_enabled,
+                    "selector_mode": "llm" if use_llm else "reviewed-topic-v1",
                     "gif_urls": sorted(ALLOWED_GIF_URLS),
                     "renderer_version": "contextual-red-selector-v3",
                 },
@@ -242,6 +305,12 @@ class ContextualGenerator:
         editorial_role = role_for(account) if role is None else role
         if editorial_role not in EDITORIAL_ROLES:
             raise ValueError("Unknown community desk role")
+        if not self.use_llm:
+            selection = reviewed_selection(observation, account, kind, self.world, editorial_role)
+            draft = render_selection(
+                selection, observation=observation, account=account, kind=kind, world=self.world
+            )
+            return self._finish(draft, selection, account, kind, observation)
         payload: dict[str, Any] = {
             "model": LLM_MODEL,
             "messages": [
@@ -287,6 +356,16 @@ class ContextualGenerator:
             )
         except (KeyError, IndexError, TypeError, ValueError, ValidationError):
             raise InvalidGeneration("Model returned an invalid red argument selection") from None
+        return self._finish(draft, selection, account, kind, observation)
+
+    def _finish(
+        self,
+        draft: Draft,
+        selection: GeneratedSelection,
+        account: str,
+        kind: Literal["post", "reply"],
+        observation: ObservationInput,
+    ) -> Draft:
         # A link is only a link: the API's media-preview behavior is not assumed.
         # Keep a small deterministic share of civic originals visual. Source
         # prose is checked for distress only to suppress an inappropriate GIF;

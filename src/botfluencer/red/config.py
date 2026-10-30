@@ -3,6 +3,7 @@
 import json
 from datetime import datetime, timedelta
 from pathlib import Path
+from typing import Literal
 
 from pydantic import AwareDatetime, Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -21,6 +22,7 @@ class RedSettings(BaseSettings):
     archive_namespace: str = Field(default="ctn-2026", pattern=r"^[a-zA-Z0-9_-]{1,64}$")
     sessions_json: SecretStr
     use_model: bool = False
+    selector_mode: Literal["llm", "reviewed"] = "llm"
     world_context_file: Path | None = None
     max_world_age_hours: float = Field(default=6, gt=0, le=24)
     gif_enabled: bool = False
