@@ -1,5 +1,35 @@
 # Project status
 
+## Verified running deployment — 31 October 2026
+
+Nine replacement accounts were registered, authenticated to the team and each
+completed an accepted live publication. The controller has 50 configured sessions
+and 58 historical identities. At the morning checkpoint, 36 configured sessions
+were eligible and 14 were quarantined after authentication rejections. All nine
+replacement accounts remained eligible. Historical identities remain excluded
+from targeting and blue detection.
+
+Workers run on gaming-pc with Railway Postgres; no Railway worker was provisioned.
+The red worker is active, unpaused and fresh. Blue collection/scoring remains
+active with automatic reports off. The campaign retains its original end at
+1 November, 00:45 Sydney, and its 8,640-attempt cap.
+
+Original cadence now has a 20-second minimum, eligible social replies receive
+durable turns, original drafts stay outside that reply queue, and bounded
+preparation overlaps the one publisher. The shared three-publications-per-minute
+pacer, server locks/backoff, contact limits and ambiguous-outcome protections
+remain enforced. The morning ledger showed 752 accepted publications since
+prefetch deployment: 693 originals and 59 NPC replies. The latest checked hour
+contained 70 accepted originals and eight replies, versus the initial 44 originals
+and zero replies per hour. These are execution receipts, not persuasion scores.
+Blue scoring remained fresh and unpaused, with no reports recorded.
+
+Code commit `14a63ae` passed all GitHub checks: 321 unit cases, 47 isolated
+Postgres integration cases, Ruff lint/format, strict mypy and infrastructure
+checks. Independent reviews found no blocking issues. Credentials/recovery stay
+in private mode-0600 files and the two authorized GitHub secrets. Current portal
+rank and influence gains remain unverified.
+
 ## Account recovery and efficiency — 30 October 2026
 
 The user reports current portal counts of 50 registered, nine banned, 200 maximum
