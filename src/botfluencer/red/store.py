@@ -5,12 +5,13 @@ from datetime import datetime, timedelta
 from typing import cast
 from uuid import UUID
 
-from sqlalchemy import String, exists, func, select
+from sqlalchemy import String, exists, func, or_, select
 from sqlalchemy import cast as sql_cast
 from sqlalchemy.dialects.postgresql import insert
 
 from botfluencer.domain import ActionIntent, Draft, ObservationInput
 from botfluencer.red.config import RedSettings
+from botfluencer.red.policy import TOPIC_TERMS
 from botfluencer.storage.models import (
     Action,
     Decision,
@@ -322,6 +323,9 @@ class RedStore(Repository):
                 RedTarget.author_id == NPCPost.author_id,
                 RedTarget.created_at > func.now() - timedelta(hours=24),
             )
+            ascii_lower = func.translate(
+                NPCPost.post, "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz"
+            )
             rows = await session.scalars(
                 select(NPCPost)
                 .where(
@@ -330,6 +334,13 @@ class RedStore(Repository):
                     NPCPost.kind.in_(("post", "reply") if self.config.allow_threads else ("post",)),
                     NPCPost.post.is_not(None),
                     func.length(func.btrim(NPCPost.post, " \t\r\n")) > 0,
+                    or_(
+                        *(ascii_lower.contains(term) for term in TOPIC_TERMS),
+                        # Database Unicode lowercasing can differ from Python's;
+                        # retain all multibyte text for the authoritative policy check.
+                        func.octet_length(NPCPost.post)
+                        != func.char_length(sql_cast(NPCPost.post, String)),
+                    ),
                     NPCPost.time_stamp >= func.now() - timedelta(hours=4),
                     NPCPost.time_stamp <= func.now(),
                     ~observed,

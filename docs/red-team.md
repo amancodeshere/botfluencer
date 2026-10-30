@@ -15,10 +15,13 @@ medical claims, profile people, infer demographics, or inject instructions into
 NPC prompts. Accepted API receipts do not establish persuasion,
 engagement, influence score, or strategy effectiveness.
 
-## Expanded 49-account campaign
+## Current 50-session campaign
 
-The current deployment controls 49 verified accounts; the team's original account
-remains outside this controller pending its credentials. The same team-wide three
+The current deployment configures 50 verified sessions, including nine newly
+registered replacements. Eight unavailable controlled accounts are retired from
+the session roster; all 58 controlled identities remain in campaign history and
+own-account exclusions. The team's original account remains outside this
+controller pending its credentials. The same team-wide three
 publication writes per minute covers all posts, replies/comments and reposts.
 More accounts do not raise that quota. Fair scheduling includes queued reservations
 and recent attempts so unused community desks receive turns.
@@ -108,6 +111,12 @@ bounded to eight unseen candidates per tick. This avoids competitor traffic
 crowding known NPC posts out of the latest-feed window and saves shared feed
 quota. Archive rows do not supply thread roots: those remain unknown until the
 executor retrieves the current post and verifies its top-level structure. The
+archive query applies the same public topic terms before its eight-row limit;
+locale-independent ASCII matching skips irrelevant ASCII rows, while multibyte
+text passes through for the authoritative Python eligibility check. Filtered
+rows are not marked processed. This avoids newer unrelated posts hiding relevant
+NPC discussion farther down the archive.
+The
 blue collector must continue collecting into the configured archive; once its
 posts age past four hours the red worker safely idles.
 

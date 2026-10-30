@@ -27,6 +27,16 @@ acknowledgements for private recovery. Independent review is clean; all 292 unit
 tests and three new Postgres replenishment cases pass. Live provisioning and
 deployment verification follow separately.
 
+All nine requested registrations were accepted and their account/team identities
+verified. The paused/drained amendment committed 58 historical identities with
+50 current sessions and retained the original end time
+`2026-10-31T13:44:59.792401Z` and attempt cap 8,640. Eight durably quarantined
+sessions were omitted; no historical ID or action was removed. The ninth reported
+banned identity was not independently identified. Blue own-ID exclusions now
+retain all 58 controlled identities. Private mode-0600 recovery/environment files
+and the two authorized GitHub secrets retain all credentials; no credential
+export workflow was introduced.
+
 Live cadence investigation at 23:13 Sydney found 44 accepted originals and zero
 replies in the preceding hour across 41 accounts. The 60-second original timer
 was always due by the roughly 82-second planning cycle and starved replies. A
@@ -35,6 +45,14 @@ a turn after originals, with bounded scanning and safe original fallback. The
 minimum original interval is reduced to 20 seconds without altering the shared
 three-publications-per-minute pacer. Thirteen scheduler unit cases and a real
 Postgres persistence/namespace case pass; independent scheduler review is clean.
+
+Initial live replacement receipts showed originals roughly 56 seconds apart,
+but 24 irrelevant-candidate skips across the first three turns still prevented
+replies. The archive query now applies the existing canonical public topic terms
+before its eight-row limit, with conservative Unicode passthrough and unchanged
+final eligibility. Independent review is clean; 315 unit tests and the additional
+Postgres discovery case pass. This reduces unnecessary round trips without
+changing publishing permissions, contact limits, or platform quotas.
 
 ## Blue operational delivery — 30 October 2026
 

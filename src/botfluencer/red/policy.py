@@ -5,6 +5,16 @@ from datetime import datetime, timedelta
 
 from botfluencer.domain import Draft, ObservationInput
 
+TOPIC_TERMS = (
+    "h2d2",
+    "vaccine",
+    "vaccination",
+    "referendum",
+    "mandate",
+    "vote yes",
+    "vote no",
+)
+
 REPLIES = (
     "I support Yes for Kingstonia's shared spaces. Protecting access also means clear "
     "exemptions, fair checks and public review. What safeguards would make that "
@@ -55,18 +65,7 @@ def eligible(
     except (KeyError, ValueError, TypeError):
         return False
     # Topic selection uses public text only, never inferred traits or private views.
-    return any(
-        word in observation.text.lower()
-        for word in (
-            "h2d2",
-            "vaccine",
-            "vaccination",
-            "referendum",
-            "mandate",
-            "vote yes",
-            "vote no",
-        )
-    )
+    return any(word in observation.text.lower() for word in TOPIC_TERMS)
 
 
 def draft_for(observation: ObservationInput) -> Draft:
