@@ -181,20 +181,26 @@ class RedStore(Repository):
                 used[account] = max(used.get(account, self.config.starts_at), stamp)
             return min(accounts, key=lambda a: (used.get(a, self.config.starts_at), a))
 
-    async def original_due(self) -> bool:
+    async def planning_preference(self) -> tuple[bool, str | None]:
+        """Read original cadence and the last durable planning turn together."""
+        recent_original = exists().where(
+            Action.namespace == self.namespace,
+            Action.payload["kind"].as_string() == "post",
+            Action.created_at > func.now() - timedelta(seconds=self.config.post_interval_seconds),
+        )
+        latest_kind = (
+            select(Action.payload["kind"].as_string())
+            .where(Action.namespace == self.namespace)
+            .order_by(Action.created_at.desc(), Action.id.desc())
+            .limit(1)
+            .scalar_subquery()
+        )
         async with self.db.sessions() as session:
-            return not bool(
-                await session.scalar(
-                    select(Action.id)
-                    .where(
-                        Action.namespace == self.namespace,
-                        Action.payload["kind"].as_string() == "post",
-                        Action.created_at
-                        > func.now() - timedelta(seconds=self.config.post_interval_seconds),
-                    )
-                    .limit(1)
-                )
-            )
+            row = (await session.execute(select(recent_original, latest_kind))).one()
+            return not bool(row[0]), row[1]
+
+    async def original_due(self) -> bool:
+        return (await self.planning_preference())[0]
 
     async def contact_available(self, author_id: int) -> bool:
         async with self.db.sessions() as session:

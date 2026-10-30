@@ -18,6 +18,7 @@ from botfluencer.red.store import DISPATCHER, PROMPT_VERSION, STRATEGY_VERSION, 
 from botfluencer.red.world import load_world
 from botfluencer.runtime.events import event
 from botfluencer.runtime.worker import Worker
+from botfluencer.storage.models import Observation
 
 
 class RedWorker(Worker):
@@ -57,6 +58,42 @@ class RedWorker(Worker):
                 with suppress(asyncio.CancelledError):
                     await self._planner
 
+    async def _contextual_reply(self) -> tuple[Observation, ObservationInput] | None:
+        await self.store.observe(await self.store.candidates(self.executor.npc_author_ids))
+        for _ in range(8):
+            observation = await self.store.unplanned(DISPATCHER, STRATEGY_VERSION, PROMPT_VERSION)
+            if observation is None:
+                break
+            item = ObservationInput.model_validate(observation.payload)
+            if not eligible(
+                item,
+                self.executor.npc_author_ids,
+                self.executor.transport.clock(),
+                allow_threads=self.config.allow_threads,
+            ):
+                await self.store.skip(
+                    observation.id, item.external_id, "Ineligible contextual target"
+                )
+                continue
+            if item.metadata.get("kind") == "reply":
+                try:
+                    target = await self.executor._read_preflight(
+                        f"/posts/{item.external_id}", wait_for_pacing=True
+                    )
+                    await self.executor._reply_coordinates(target, item.external_id)
+                except PermanentRejection:
+                    await self.store.skip(
+                        observation.id, item.external_id, "Ineligible conversation ancestry"
+                    )
+                    continue
+            if not await self.store.contact_available(int(item.metadata["author_id"])):
+                await self.store.skip(
+                    observation.id, item.external_id, "Team contact already reserved"
+                )
+                continue
+            return observation, item
+        return None
+
     async def plan_contextual(self) -> None:
         try:
             async with asyncio.timeout(self.settings.operation_timeout_seconds):
@@ -75,10 +112,19 @@ class RedWorker(Worker):
                     use_llm=getattr(self.config, "selector_mode", "llm") == "llm",
                 )
                 account = await self.store.next_account()
-                original = await self.store.original_due()
+                original_due, latest_kind = await self.store.planning_preference()
+                # A completed planning turn persists in the ledger across restarts.
+                # Even a slow planner gives available replies a turn after an original.
+                reply = (
+                    await self._contextual_reply()
+                    if not original_due or latest_kind == "post"
+                    else None
+                )
                 now = self.executor.transport.clock()
                 kind: Literal["post", "reply"]
-                if original:
+                if reply is None:
+                    if not original_due:
+                        return
                     slot = int(now.timestamp() // self.config.post_interval_seconds)
                     source = world.sources[slot % len(world.sources)]
                     item = ObservationInput(
@@ -92,42 +138,8 @@ class RedWorker(Worker):
                     observation = await self.store.find_observation(item.external_id)
                     kind = "post"
                 else:
-                    await self.store.observe(
-                        await self.store.candidates(self.executor.npc_author_ids)
-                    )
-                    observation = await self.store.unplanned(
-                        DISPATCHER, STRATEGY_VERSION, PROMPT_VERSION
-                    )
-                    if observation is None:
-                        return
-                    item = ObservationInput.model_validate(observation.payload)
-                    if not eligible(
-                        item,
-                        self.executor.npc_author_ids,
-                        now,
-                        allow_threads=self.config.allow_threads,
-                    ):
-                        await self.store.skip(
-                            observation.id, item.external_id, "Ineligible contextual target"
-                        )
-                        return
-                    if item.metadata.get("kind") == "reply":
-                        try:
-                            target = await self.executor._read_preflight(
-                                f"/posts/{item.external_id}", wait_for_pacing=True
-                            )
-                            await self.executor._reply_coordinates(target, item.external_id)
-                        except PermanentRejection:
-                            await self.store.skip(
-                                observation.id, item.external_id, "Ineligible conversation ancestry"
-                            )
-                            return
+                    observation, item = reply
                     kind = "reply"
-                    if not await self.store.contact_available(int(item.metadata["author_id"])):
-                        await self.store.skip(
-                            observation.id, item.external_id, "Team contact already reserved"
-                        )
-                        return
                 if observation is None:
                     return
                 if getattr(

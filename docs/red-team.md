@@ -70,7 +70,14 @@ startup still rejects unreviewed configuration replacement.
 
 Additional private settings: `RED_WORLD_CONTEXT_FILE`, `RED_MAX_WORLD_AGE_HOURS`
 (6), `RED_IDENTITY_TIMEOUT_SECONDS` (600), `RED_MAX_PENDING_ACTIONS` (4), and
-`RED_POST_INTERVAL_SECONDS` (300 by default, 60 in the expanded deployment).
+`RED_POST_INTERVAL_SECONDS` (300 by default, minimum 20, now deployed at 20).
+This is a minimum original-post interval, not an account-specific quota. A
+namespace-scoped snapshot of the latest planned action gives eligible NPC replies
+a turn after originals, even when planning takes longer than the interval.
+Discovery skips up to eight ineligible/already-contacted observations per turn.
+An exhausted eligible scan permits an original only when due; pacing failures
+and timeouts defer work. The combined publisher still observes the shared
+three-writes-per-minute allowance and server backoff.
 The expanded configuration uses hourly attempt
 ceilings of 180 for publications and model calls, a total cap of 8640, a two-second
 dispatch polling target, 90-second operations and 130-second heartbeat tolerance.

@@ -889,10 +889,10 @@ async def test_contextual_planner_persists_contact_and_planning_skips_without_re
     store = SimpleNamespace(
         is_paused=AsyncMock(return_value=False),
         next_account=AsyncMock(return_value="10"),
-        original_due=AsyncMock(return_value=False),
+        planning_preference=AsyncMock(return_value=(False, None)),
         candidates=AsyncMock(return_value=[]),
         observe=AsyncMock(),
-        unplanned=AsyncMock(side_effect=[observation, None]),
+        unplanned=AsyncMock(side_effect=[observation, None, None]),
         contact_available=AsyncMock(return_value=contact_available),
         reserve_generation=AsyncMock(return_value=True),
         plan_reply=AsyncMock(return_value=False),

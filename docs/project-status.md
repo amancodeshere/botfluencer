@@ -27,6 +27,15 @@ acknowledgements for private recovery. Independent review is clean; all 292 unit
 tests and three new Postgres replenishment cases pass. Live provisioning and
 deployment verification follow separately.
 
+Live cadence investigation at 23:13 Sydney found 44 accepted originals and zero
+replies in the preceding hour across 41 accounts. The 60-second original timer
+was always due by the roughly 82-second planning cycle and starved replies. A
+durable scheduler now checks the latest planned kind and gives eligible replies
+a turn after originals, with bounded scanning and safe original fallback. The
+minimum original interval is reduced to 20 seconds without altering the shared
+three-publications-per-minute pacer. Thirteen scheduler unit cases and a real
+Postgres persistence/namespace case pass; independent scheduler review is clean.
+
 ## Blue operational delivery — 30 October 2026
 
 The user requested deployment of the planned blue initiative and investigation
