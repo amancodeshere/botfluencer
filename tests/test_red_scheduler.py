@@ -15,6 +15,7 @@ from botfluencer.platform.base import SafeRetry
 from botfluencer.red.config import RedSettings
 from botfluencer.red.store import RedStore
 from botfluencer.red.worker import RedWorker
+from botfluencer.runtime.worker import WorkerState
 from botfluencer.storage.models import Action
 from botfluencer.storage.repository import Repository
 
@@ -105,15 +106,32 @@ def planner(monkeypatch, tmp_path, *, due: bool = True, latest: str | None = "po
 async def test_configured_originals_per_reply_uses_durable_post_streak(
     monkeypatch, tmp_path, streak: int, expected_kind: str
 ) -> None:
-    make_worker, store, generator, _, _, _ = planner(monkeypatch, tmp_path, due=True)
+    make_worker, store, generator, executor, _, _ = planner(monkeypatch, tmp_path, due=True)
     make_worker().config.originals_per_reply = 2
     store.original_streak.return_value = streak
     store.unplanned.return_value = npc_observation()
+    if streak == 1:
+        store.continuation_candidates.return_value = [
+            ObservationInput(
+                external_id="501",
+                text="Synthetic direct response",
+                source="social",
+                metadata={
+                    "post_id": 501,
+                    "author_id": 7,
+                    "kind": "reply",
+                    "root_post_id": 100,
+                    "created_at": datetime.now(UTC).isoformat(),
+                },
+            )
+        ]
     await make_worker().plan_contextual()
     assert generator.generate.await_args.kwargs["kind"] == expected_kind
     if expected_kind == "post":
         store.original_streak.assert_awaited_once_with()
         store.unplanned.assert_not_awaited()
+        assert store.continuation_candidates.await_count == 0
+        executor._read_preflight.assert_not_awaited()
     else:
         store.unplanned.assert_awaited_once()
 
@@ -213,6 +231,8 @@ async def test_slow_reply_discovery_times_out_without_skipping_candidate(
     worker = make_worker()
     worker.settings.operation_timeout_seconds = 0.3
     worker.config.originals_per_reply = originals_per_reply
+    if due and originals_per_reply > 1:
+        store.original_streak.return_value = 2
     store.continuation_candidates.return_value = [
         ObservationInput(
             external_id="501",
@@ -243,13 +263,124 @@ async def test_slow_reply_discovery_times_out_without_skipping_candidate(
     store.skip.assert_not_awaited()
     if due:
         assert generator.generate.await_args.kwargs["kind"] == "post"
-        store.observe.assert_awaited_once()
+        assert store.observe.await_count == (2 if originals_per_reply > 1 else 1)
+        if originals_per_reply > 1:
+            assert store.observe.await_args_list[0].args[0] == []
         store.plan_reply.assert_awaited_once()
         assert store.plan_reply.await_args.args[3].kind == "post"
     else:
         generator.generate.assert_not_awaited()
-        store.observe.assert_not_awaited()
+        if originals_per_reply == 1:
+            store.observe.assert_not_awaited()
+        else:
+            store.observe.assert_awaited_once_with([])
         store.plan_reply.assert_not_awaited()
+
+
+async def test_continuation_timeout_leaves_time_for_ordinary_reply(monkeypatch, tmp_path) -> None:
+    make_worker, store, generator, executor, *_ = planner(monkeypatch, tmp_path, due=True)
+    worker = make_worker()
+    worker.settings.operation_timeout_seconds = 0.9
+    worker.config.originals_per_reply = 2
+    store.original_streak.return_value = 2
+    store.unplanned.return_value = npc_observation(777)
+    store.continuation_candidates.return_value = [
+        ObservationInput(
+            external_id="501",
+            text="Synthetic direct response",
+            source="social",
+            metadata={
+                "post_id": 501,
+                "author_id": 7,
+                "kind": "reply",
+                "root_post_id": 100,
+                "created_at": datetime.now(UTC).isoformat(),
+            },
+        )
+    ]
+    started = asyncio.Event()
+    release = asyncio.Event()
+
+    async def blocked_read(*_args, **_kwargs):
+        started.set()
+        await release.wait()
+
+    executor._read_preflight.side_effect = blocked_read
+    task = asyncio.create_task(worker.plan_contextual())
+    await asyncio.wait_for(started.wait(), timeout=1)
+    await task
+
+    assert generator.generate.await_args.kwargs["kind"] == "reply"
+    assert generator.generate.await_args.args[0].external_id == "777"
+    store.skip.assert_not_awaited()
+    store.plan_reply.assert_awaited_once()
+    assert store.plan_reply.await_args.args[3].kind == "reply"
+
+
+async def test_completed_planner_during_claim_is_replaced_before_publication() -> None:
+    now = datetime.now(UTC)
+    worker = RedWorker.__new__(RedWorker)
+    worker.id = uuid4()
+    worker.state = WorkerState()
+    worker._planner = None
+    worker.config = SimpleNamespace(
+        starts_at=now - timedelta(minutes=1),
+        ends_at=now + timedelta(hours=1),
+        max_pending_actions=4,
+    )
+    worker.executor = SimpleNamespace(transport=SimpleNamespace(clock=lambda: now))
+    intent = object()
+    previous_started = asyncio.Event()
+    planner_release = asyncio.Event()
+    next_planner_started = asyncio.Event()
+    publication_started = asyncio.Event()
+    publication_release = asyncio.Event()
+
+    async def previous_planner():
+        previous_started.set()
+        await planner_release.wait()
+
+    async def claim():
+        planner_release.set()
+        assert worker._planner is not None
+        await worker._planner
+        return intent
+
+    async def next_planner():
+        next_planner_started.set()
+
+    async def execute(_intent):
+        publication_started.set()
+        await publication_release.wait()
+
+    worker.store = SimpleNamespace(
+        is_paused=AsyncMock(return_value=False),
+        claim=AsyncMock(side_effect=claim),
+        pending_count=AsyncMock(return_value=1),
+        heartbeat=AsyncMock(),
+    )
+    worker.execute = AsyncMock(side_effect=execute)
+    worker.plan_contextual = AsyncMock(side_effect=next_planner)
+    previous = asyncio.create_task(previous_planner())
+    worker._planner = previous
+    await previous_started.wait()
+    tick = asyncio.create_task(worker.contextual_tick())
+    try:
+        async with asyncio.timeout(1):
+            await next_planner_started.wait()
+            await publication_started.wait()
+        assert previous.done()
+        assert worker._planner is not previous
+        worker.plan_contextual.assert_awaited_once()
+        worker.execute.assert_awaited_once_with(intent)
+        publication_release.set()
+        await tick
+    finally:
+        publication_release.set()
+        planner_release.set()
+        if worker._planner is not None and not worker._planner.done():
+            worker._planner.cancel()
+        await tick
 
 
 @pytest.mark.parametrize("stop", ["paused", "expired"])

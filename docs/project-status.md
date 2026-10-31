@@ -16,7 +16,7 @@ Implementation adds acknowledged-parent NPC conversation continuations, same-acc
 responses, fresh ancestry verification, durable turn/cooldown bounds and finite
 reviewed conversation text. The deployment profile targets two combined
 publications/minute, with a soft two-general-posts/ordinary-reply preference and
-continuation priority. The three-publications/minute quota is shared by the
+continuation priority on reply turns. The three-publications/minute quota is shared by the
 entire team; more accounts do not multiply it. Quota compliance cannot guarantee
 freedom from moderation bans.
 
@@ -47,6 +47,16 @@ scoring is fresh. The two/minute figure is a scheduling ceiling, not a measured
 steady throughput claim. Tests verify continuation behavior; no live continuation
 receipt was present at this checkpoint. Current portal rank and persuasion gains
 remain unverified.
+
+The first two replacement receipts were 85 seconds apart, so the pacing ceiling
+alone did not establish improved throughput. Further scheduling review identified
+unconditional discovery on general-post turns and a completed-planner race that
+prevented preparation from overlapping publication. The follow-up skips discovery
+on early general turns, reserves ordinary-reply discovery time after a separately
+bounded continuation scan, and reaps completed planners after claiming work.
+Capacity is then read only while no planner is active, preserving the pending cap
+without adding a database count to every active-planner tick.
+Verification and deployment of this follow-up are in progress.
 
 ## Earlier morning deployment — 31 October 2026
 

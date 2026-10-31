@@ -235,15 +235,26 @@ class RedWorker(Worker):
                     async with discovery_timeout:
                         originals_per_reply = getattr(self.config, "originals_per_reply", 1)
                         if originals_per_reply > 1:
-                            # Direct, verified responses keep priority over the ordinary mix.
-                            reply = await self._conversation_reply()
-                            if reply is None and (
+                            reply_turn = (
                                 not original_due
                                 or await self.store.original_streak() >= originals_per_reply
-                            ):
-                                ordinary = await self._ordinary_reply()
-                                if ordinary is not None:
-                                    reply = ordinary[0], ordinary[1], None, None
+                            )
+                            if reply_turn:
+                                # Verified continuations get first chance on a reply turn.
+                                continuation_timeout = asyncio.timeout(
+                                    min(10.0, self.settings.operation_timeout_seconds / 9)
+                                )
+                                try:
+                                    async with continuation_timeout:
+                                        reply = await self._conversation_reply()
+                                except TimeoutError:
+                                    if not continuation_timeout.expired():
+                                        raise
+                                    event("red_continuation_discovery_timeout")
+                                if reply is None:
+                                    ordinary = await self._ordinary_reply()
+                                    if ordinary is not None:
+                                        reply = ordinary[0], ordinary[1], None, None
                         else:
                             # Preserve the existing one-original/one-reply default.
                             reply = (
@@ -333,11 +344,13 @@ class RedWorker(Worker):
         active = self.config.starts_at <= self.executor.transport.clock() < self.config.ends_at
         if not self.state.paused and active:
             intent = await self.store.claim()
-            if (
-                self._planner is None
-                and await self.store.pending_count() < self.config.max_pending_actions
-            ):
-                self._planner = asyncio.create_task(self.plan_contextual(), name="red-planner")
+            if self._planner is not None and self._planner.done():
+                self._planner.result()
+                self._planner = None
+            if self._planner is None:
+                pending = await self.store.pending_count()
+                if pending < self.config.max_pending_actions:
+                    self._planner = asyncio.create_task(self.plan_contextual(), name="red-planner")
             if intent is not None:
                 await self.execute(intent)
         await self.store.heartbeat(self.id)
