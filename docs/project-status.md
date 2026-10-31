@@ -37,10 +37,16 @@ The first post after resume received an accepted receipt and the durable shared
 publish floor is now 30 seconds. Live tracing then found optional reply discovery
 exhausting the 90-second planning timeout. A reviewed follow-up bounds discovery
 to at most 30 seconds or one-third of the operation timeout, leaving time for a
-due original while retaining deferred candidates. Deployment verification of this
-follow-up is pending. Tests verify continuation behavior; a genuine NPC follow-up
-must exist before a live continuation can be demonstrated. Current portal rank
-and persuasion gains remain unverified.
+due original while retaining deferred candidates. Follow-up commit `a34cc54`
+passed all hosted checks (342 unit cases and 52 Postgres integration cases), is
+installed on gaming-pc and has been resumed after healthy paused startup. Fresh
+verification observed the local discovery deadline followed by an accepted
+original publication from replacement account 15604 at `2026-10-31T00:25:51Z`.
+Both services are active without automatic restarts, red is unpaused and blue
+scoring is fresh. The two/minute figure is a scheduling ceiling, not a measured
+steady throughput claim. Tests verify continuation behavior; no live continuation
+receipt was present at this checkpoint. Current portal rank and persuasion gains
+remain unverified.
 
 ## Earlier morning deployment — 31 October 2026
 
