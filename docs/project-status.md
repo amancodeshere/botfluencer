@@ -1,5 +1,21 @@
 # Project status
 
+## Second replenishment — 31 October 2026
+
+The user supplied a fresh portal snapshot: 72 registered, 24 banned, maximum
+total 200 and maximum active 50. The two free active slots were used to register
+accounts 15631 and 15632; both authenticated to team 38. Private recovery files,
+the ignored local environment and the two authorized GitHub secrets are updated.
+The deployed roster has 50 configured sessions and 73 historical controlled IDs.
+Account 15174 is durably quarantined and omitted. The second reported newly
+banned identity is not yet mapped by the controller; authentication alone cannot
+establish whether an account is banned. Its session remains subject to automatic
+quarantine on a publishing authentication rejection. Full own-ID exclusions retain
+all historical accounts. The paused amendment succeeded without changing the
+deadline or cap. Startup verified all 50 configured session identities at
+`2026-10-31T00:39:42Z`; red resumed with healthy active leadership and blue scoring
+is fresh. No automatic reports were enabled.
+
 ## Conversation refresh — 31 October 2026
 
 The user supplied portal counts of 59 registered, 22 banned, maximum total 200
@@ -56,7 +72,18 @@ on early general turns, reserves ordinary-reply discovery time after a separatel
 bounded continuation scan, and reaps completed planners after claiming work.
 Capacity is then read only while no planner is active, preserving the pending cap
 without adding a database count to every active-planner tick.
-Verification and deployment of this follow-up are in progress.
+Follow-up commit `9253073` is pushed and deployed on gaming-pc. Independent review,
+344 unit cases, 52 hosted Postgres cases, Ruff lint/format and mypy pass. The first
+two accepted posts after startup were 59 seconds apart,
+versus the earlier 85-second sample. This is an early execution sample, not an
+hourly throughput or persuasion measurement.
+
+A later queue audit found 39 pending replies: 29 failed ordinary policy and ten
+passed before ancestry verification. Replies had been read over the network
+before this policy check. The final routing follow-up moves the ordinary check
+earlier without durably skipping possible topic-free continuations. Reply turns
+alternate the first discovery lane within the same 30-second budget, preventing
+one slow lane from permanently denying the other a turn. Verification follows.
 
 ## Earlier morning deployment — 31 October 2026
 

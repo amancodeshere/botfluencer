@@ -117,10 +117,10 @@ qualify only through the verified continuation path. No extra model call is need
 target of two combined publications per minute. Persisted stricter publish pacing,
 server locks and backoff take precedence. `RED_ORIGINALS_PER_REPLY` defaults to 1
 and is deployed at 2: it probes for an ordinary reply after two general posts.
-Due general-post turns below that streak proceed without reply scanning. On reply
-turns, verified NPC continuations get a first search budget of at most 10 seconds
-or one-ninth of the overall operation timeout; ordinary replies can use the
-remaining discovery budget. When no safe reply exists, general posts may continue.
+Due general-post turns below that streak proceed without reply scanning. Reply
+turns alternate which discovery lane starts: verified NPC continuations or ordinary
+replies. The hint flips before waiting so a slow lane yields the next turn to the
+other lane. When no safe reply exists, general posts may continue.
 These settings are team-wide scheduling preferences,
 not per-account allowances or guarantees against moderation.
 
@@ -128,6 +128,9 @@ Optional reply discovery has a local budget of at most 30 seconds or one-third
 of the overall operation timeout. If that budget expires, a due general post can
 still be planned. Discovery timeout leaves candidates eligible for later turns;
 it does not create a target reservation or relax publication preflight checks.
+Ordinary policy checks run before network ancestry checks. Replies that fail
+ordinary policy remain available to the continuation lane; the routing exclusion
+does not authorize a continuation or create a durable skip decision.
 Completed planners are reaped after claiming work so the next draft can be
 prepared during publication. Queue capacity is read only while no planner is
 active, so another draft cannot be committed during that count query.

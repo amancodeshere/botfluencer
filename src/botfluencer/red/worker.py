@@ -161,6 +161,20 @@ class RedWorker(Worker):
             if observation is None:
                 break
             item = ObservationInput.model_validate(observation.payload)
+            if not eligible(
+                item,
+                self.executor.npc_author_ids,
+                self.executor.transport.clock(),
+                allow_threads=self.config.allow_threads,
+            ):
+                if item.metadata.get("kind") == "reply":
+                    excluded = excluded | {item.external_id}
+                    self._conversation_targets = excluded
+                else:
+                    await self.store.skip(
+                        observation.id, item.external_id, "Ineligible contextual target"
+                    )
+                continue
             target = None
             if self.config.allow_threads and item.metadata.get("kind") == "reply":
                 try:
@@ -178,16 +192,6 @@ class RedWorker(Worker):
                         observation.id, item.external_id, "Ineligible conversation parent"
                     )
                     continue
-            if not eligible(
-                item,
-                self.executor.npc_author_ids,
-                self.executor.transport.clock(),
-                allow_threads=self.config.allow_threads,
-            ):
-                await self.store.skip(
-                    observation.id, item.external_id, "Ineligible contextual target"
-                )
-                continue
             if item.metadata.get("kind") == "reply":
                 try:
                     if target is None:
@@ -240,21 +244,21 @@ class RedWorker(Worker):
                                 or await self.store.original_streak() >= originals_per_reply
                             )
                             if reply_turn:
-                                # Verified continuations get first chance on a reply turn.
-                                continuation_timeout = asyncio.timeout(
-                                    min(10.0, self.settings.operation_timeout_seconds / 9)
-                                )
-                                try:
-                                    async with continuation_timeout:
-                                        reply = await self._conversation_reply()
-                                except TimeoutError:
-                                    if not continuation_timeout.expired():
-                                        raise
-                                    event("red_continuation_discovery_timeout")
-                                if reply is None:
+                                ordinary_first = self._prefer_ordinary
+                                # Flip before waiting so a timed-out lane yields the next turn.
+                                self._prefer_ordinary = not ordinary_first
+                                if ordinary_first:
                                     ordinary = await self._ordinary_reply()
                                     if ordinary is not None:
                                         reply = ordinary[0], ordinary[1], None, None
+                                    else:
+                                        reply = await self._conversation_reply()
+                                else:
+                                    reply = await self._conversation_reply()
+                                    if reply is None:
+                                        ordinary = await self._ordinary_reply()
+                                        if ordinary is not None:
+                                            reply = ordinary[0], ordinary[1], None, None
                         else:
                             # Preserve the existing one-original/one-reply default.
                             reply = (

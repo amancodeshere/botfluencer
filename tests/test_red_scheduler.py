@@ -203,6 +203,18 @@ async def test_reply_scan_stops_after_eight_ineligible_rows(monkeypatch, tmp_pat
     store.plan_reply.assert_not_awaited()
 
 
+async def test_ineligible_ordinary_reply_needs_no_fresh_read_and_remains_discoverable(
+    monkeypatch, tmp_path
+) -> None:
+    make_worker, store, _, executor, *_ = planner(monkeypatch, tmp_path, due=False)
+    store.unplanned.return_value = npc_observation(threaded=True, valid=False)
+    await make_worker().plan_contextual()
+
+    executor._read_preflight.assert_not_awaited()
+    store.skip.assert_not_awaited()
+    store.continuation_candidates.assert_awaited()
+
+
 @pytest.mark.parametrize("error", [RequestDeferred(0.01), SafeRetry(0), TimeoutError()])
 async def test_preflight_deferral_never_falls_back_to_original(
     monkeypatch, tmp_path, error
@@ -263,24 +275,21 @@ async def test_slow_reply_discovery_times_out_without_skipping_candidate(
     store.skip.assert_not_awaited()
     if due:
         assert generator.generate.await_args.kwargs["kind"] == "post"
-        assert store.observe.await_count == (2 if originals_per_reply > 1 else 1)
-        if originals_per_reply > 1:
-            assert store.observe.await_args_list[0].args[0] == []
+        store.observe.assert_awaited_once()
         store.plan_reply.assert_awaited_once()
         assert store.plan_reply.await_args.args[3].kind == "post"
     else:
         generator.generate.assert_not_awaited()
-        if originals_per_reply == 1:
-            store.observe.assert_not_awaited()
-        else:
-            store.observe.assert_awaited_once_with([])
+        store.observe.assert_not_awaited()
         store.plan_reply.assert_not_awaited()
 
 
-async def test_continuation_timeout_leaves_time_for_ordinary_reply(monkeypatch, tmp_path) -> None:
+async def test_timed_out_continuation_lane_yields_to_ordinary_reply_next_turn(
+    monkeypatch, tmp_path
+) -> None:
     make_worker, store, generator, executor, *_ = planner(monkeypatch, tmp_path, due=True)
     worker = make_worker()
-    worker.settings.operation_timeout_seconds = 0.9
+    worker.settings.operation_timeout_seconds = 0.3
     worker.config.originals_per_reply = 2
     store.original_streak.return_value = 2
     store.unplanned.return_value = npc_observation(777)
@@ -299,21 +308,26 @@ async def test_continuation_timeout_leaves_time_for_ordinary_reply(monkeypatch, 
         )
     ]
     started = asyncio.Event()
-    release = asyncio.Event()
 
     async def blocked_read(*_args, **_kwargs):
         started.set()
-        await release.wait()
+        await asyncio.Event().wait()
 
     executor._read_preflight.side_effect = blocked_read
-    task = asyncio.create_task(worker.plan_contextual())
+    await worker.plan_contextual()
     await asyncio.wait_for(started.wait(), timeout=1)
-    await task
 
-    assert generator.generate.await_args.kwargs["kind"] == "reply"
-    assert generator.generate.await_args.args[0].external_id == "777"
+    assert generator.generate.await_args.kwargs["kind"] == "post"
+    assert worker._prefer_ordinary is True
     store.skip.assert_not_awaited()
     store.plan_reply.assert_awaited_once()
+    assert store.plan_reply.await_args.args[3].kind == "post"
+
+    executor._read_preflight.side_effect = None
+    await worker.plan_contextual()
+    assert generator.generate.await_args.kwargs["kind"] == "reply"
+    assert generator.generate.await_args.args[0].external_id == "777"
+    assert store.plan_reply.await_count == 2
     assert store.plan_reply.await_args.args[3].kind == "reply"
 
 
