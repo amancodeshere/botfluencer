@@ -15,6 +15,8 @@ all historical accounts. The paused amendment succeeded without changing the
 deadline or cap. Startup verified all 50 configured session identities at
 `2026-10-31T00:39:42Z`; red resumed with healthy active leadership and blue scoring
 is fresh. No automatic reports were enabled.
+Both replacements then completed accepted live original publications:
+15631 at `2026-10-31T00:53:50Z` and 15632 at `2026-10-31T00:55:27Z`.
 
 ## Conversation refresh — 31 October 2026
 
@@ -32,8 +34,9 @@ Implementation adds acknowledged-parent NPC conversation continuations, same-acc
 responses, fresh ancestry verification, durable turn/cooldown bounds and finite
 reviewed conversation text. The deployment profile targets two combined
 publications/minute, with a soft two-general-posts/ordinary-reply preference and
-continuation priority on reply turns. The three-publications/minute quota is shared by the
-entire team; more accounts do not multiply it. Quota compliance cannot guarantee
+alternating continuation/ordinary discovery on reply turns. The three-publications/
+minute quota is shared by the entire team; more accounts do not multiply it.
+Quota compliance cannot guarantee
 freedom from moderation bans.
 
 Code commit `c5822c6` passed all hosted checks: 338 unit cases, 52 isolated
@@ -83,7 +86,13 @@ passed before ancestry verification. Replies had been read over the network
 before this policy check. The final routing follow-up moves the ordinary check
 earlier without durably skipping possible topic-free continuations. Reply turns
 alternate the first discovery lane within the same 30-second budget, preventing
-one slow lane from permanently denying the other a turn. Verification follows.
+one slow lane from permanently denying the other a turn.
+Code commit `fcbea39` is pushed and installed on gaming-pc. Independent review,
+345 unit cases, 52 hosted Postgres cases, Ruff lint/format, mypy and infrastructure
+checks all pass. Both services are active without automatic restarts, red is
+healthy and unpaused, and blue scoring is fresh. The shared publication floor
+remains 30 seconds. Both new replacements have accepted publishing receipts; a live NPC
+continuation receipt and a sustained higher reply rate remain unverified.
 
 ## Earlier morning deployment — 31 October 2026
 
