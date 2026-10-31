@@ -1,5 +1,6 @@
 """Persisted publication balance and bounded NPC reply discovery."""
 
+import asyncio
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
@@ -199,6 +200,56 @@ async def test_preflight_deferral_never_falls_back_to_original(
     store.plan_reply.assert_not_awaited()
     store.find_observation.assert_not_awaited()
     store.skip.assert_not_awaited()
+
+
+@pytest.mark.parametrize("due", [False, True])
+@pytest.mark.parametrize("originals_per_reply", [1, 2])
+async def test_slow_reply_discovery_times_out_without_skipping_candidate(
+    monkeypatch, tmp_path, due: bool, originals_per_reply: int
+) -> None:
+    make_worker, store, generator, executor, *_ = planner(
+        monkeypatch, tmp_path, due=due, latest="post"
+    )
+    worker = make_worker()
+    worker.settings.operation_timeout_seconds = 0.3
+    worker.config.originals_per_reply = originals_per_reply
+    store.continuation_candidates.return_value = [
+        ObservationInput(
+            external_id="501",
+            text="Synthetic direct response",
+            source="social",
+            metadata={
+                "post_id": 501,
+                "author_id": 7,
+                "kind": "reply",
+                "root_post_id": 100,
+                "created_at": datetime.now(UTC).isoformat(),
+            },
+        )
+    ]
+    started = asyncio.Event()
+    release = asyncio.Event()
+
+    async def blocked_read(*_args, **_kwargs):
+        started.set()
+        await release.wait()
+
+    executor._read_preflight.side_effect = blocked_read
+    task = asyncio.create_task(worker.plan_contextual())
+    await asyncio.wait_for(started.wait(), timeout=1)
+    await task
+
+    assert not task.cancelled()
+    store.skip.assert_not_awaited()
+    if due:
+        assert generator.generate.await_args.kwargs["kind"] == "post"
+        store.observe.assert_awaited_once()
+        store.plan_reply.assert_awaited_once()
+        assert store.plan_reply.await_args.args[3].kind == "post"
+    else:
+        generator.generate.assert_not_awaited()
+        store.observe.assert_not_awaited()
+        store.plan_reply.assert_not_awaited()
 
 
 @pytest.mark.parametrize("stop", ["paused", "expired"])

@@ -5,18 +5,44 @@
 The user supplied portal counts of 59 registered, 22 banned, maximum total 200
 and maximum active 50. Thirteen new accounts were registered and authenticated
 within the resulting 13-slot headroom. Replenishment preserves all historical
-identities and the existing campaign deadline; activation verification follows.
+identities and the existing campaign deadline. The paused amendment now retains
+71 historical controlled identities and 49 current sessions; the team's original
+uncontrolled account was included when calculating platform headroom. Another
+older account received a publishing authentication rejection before cutover,
+bringing durable historical quarantine to 23 and leaving 48 configured sessions
+eligible. Quarantined identities remain excluded from targeting and blue detection.
 
 Implementation adds acknowledged-parent NPC conversation continuations, same-account
 responses, fresh ancestry verification, durable turn/cooldown bounds and finite
 reviewed conversation text. The deployment profile targets two combined
 publications/minute, with a soft two-general-posts/ordinary-reply preference and
-continuation priority. Independent reviews are clean and 338 unit cases pass.
-Migration 0008 is additive and passed isolated metadata drift checking. Local
-integration setup stalled in Postgres connection establishment; the full hosted
-integration suite is the gate before application migration and worker deployment.
+continuation priority. The three-publications/minute quota is shared by the
+entire team; more accounts do not multiply it. Quota compliance cannot guarantee
+freedom from moderation bans.
 
-## Verified running deployment — 31 October 2026
+Code commit `c5822c6` passed all hosted checks: 338 unit cases, 52 isolated
+Postgres integration cases, Ruff lint/format, strict mypy and infrastructure
+checks. Independent reviews are clean. Additive migration 0008 also passed
+isolated metadata drift checking and is installed on the application database.
+Local integration setup stalled in connection establishment; the full hosted
+suite supplied the deployment gate. The gaming-pc checkout and private red/blue
+profiles are updated. Startup verified 48 eligible sessions against 1,450 known
+NPC authors; the controller is active and resumed. Blue scoring is fresh with
+automatic reports still off, all 71 historical own IDs excluded and a new healthy
+reporter session. The campaign still ends at `2026-10-31T13:44:59.792401Z`
+(1 November, 00:45 Sydney) with an 8,640-attempt cap. Credentials remain in private
+mode-0600 files and the authorized write-only GitHub secrets.
+
+The first post after resume received an accepted receipt and the durable shared
+publish floor is now 30 seconds. Live tracing then found optional reply discovery
+exhausting the 90-second planning timeout. A reviewed follow-up bounds discovery
+to at most 30 seconds or one-third of the operation timeout, leaving time for a
+due original while retaining deferred candidates. Deployment verification of this
+follow-up is pending. Tests verify continuation behavior; a genuine NPC follow-up
+must exist before a live continuation can be demonstrated. Current portal rank
+and persuasion gains remain unverified.
+
+## Earlier morning deployment — 31 October 2026
 
 Nine replacement accounts were registered, authenticated to the team and each
 completed an accepted live publication. The controller has 50 configured sessions

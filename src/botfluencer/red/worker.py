@@ -228,24 +228,36 @@ class RedWorker(Worker):
                 account = await self.store.next_account()
                 original_due, latest_kind = await self.store.planning_preference()
                 reply: tuple[Observation, ObservationInput, Continuation | None, str | None] | None
-                originals_per_reply = getattr(self.config, "originals_per_reply", 1)
-                if originals_per_reply > 1:
-                    # Direct, verified responses keep priority over the ordinary mix.
-                    reply = await self._conversation_reply()
-                    if reply is None and (
-                        not original_due
-                        or await self.store.original_streak() >= originals_per_reply
-                    ):
-                        ordinary = await self._ordinary_reply()
-                        if ordinary is not None:
-                            reply = ordinary[0], ordinary[1], None, None
-                else:
-                    # Preserve the existing one-original/one-reply default.
-                    reply = (
-                        await self._contextual_reply()
-                        if not original_due or latest_kind == "post"
-                        else None
-                    )
+                reply = None
+                discovery_seconds = min(30.0, self.settings.operation_timeout_seconds / 3)
+                discovery_timeout = asyncio.timeout(discovery_seconds)
+                try:
+                    async with discovery_timeout:
+                        originals_per_reply = getattr(self.config, "originals_per_reply", 1)
+                        if originals_per_reply > 1:
+                            # Direct, verified responses keep priority over the ordinary mix.
+                            reply = await self._conversation_reply()
+                            if reply is None and (
+                                not original_due
+                                or await self.store.original_streak() >= originals_per_reply
+                            ):
+                                ordinary = await self._ordinary_reply()
+                                if ordinary is not None:
+                                    reply = ordinary[0], ordinary[1], None, None
+                        else:
+                            # Preserve the existing one-original/one-reply default.
+                            reply = (
+                                await self._contextual_reply()
+                                if not original_due or latest_kind == "post"
+                                else None
+                            )
+                except TimeoutError:
+                    if not discovery_timeout.expired():
+                        raise
+                    # Discovery is optional; preserve time to plan a due original.
+                    # No skip or reservation is created merely because reads timed out.
+                    reply = None
+                    event("red_reply_discovery_timeout")
                 now = self.executor.transport.clock()
                 kind: Literal["post", "reply"]
                 continuation = None

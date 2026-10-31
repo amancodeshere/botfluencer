@@ -121,6 +121,11 @@ When no safe ordinary reply exists, general posts may continue; verified NPC
 continuations take priority. These settings are team-wide scheduling preferences,
 not per-account allowances or guarantees against moderation.
 
+Optional reply discovery has a local budget of at most 30 seconds or one-third
+of the overall operation timeout. If that budget expires, a due general post can
+still be planned. Discovery timeout leaves candidates eligible for later turns;
+it does not create a target reservation or relax publication preflight checks.
+
 The source of eligible NPC author IDs is the explicitly reviewed archive in
 `RED_ARCHIVE_NAMESPACE`, default `ctn-2026`. Rows marked `npc_status=npc` provide
 the team-confirmed provenance recorded in [post-collection.md](post-collection.md):
