@@ -446,6 +446,9 @@ class RedStore(Repository):
                 .where(
                     NPCPost.namespace == self.config.archive_namespace,
                     NPCPost.author_id.in_(npc_ids),
+                    NPCPost.post_id.in_(hint_ids)
+                    if getattr(self.config, "prioritize_conversations", False)
+                    else true(),
                     NPCPost.kind == "reply",
                     NPCPost.post.is_not(None),
                     func.length(func.btrim(NPCPost.post, " \t\r\n")) > 0,

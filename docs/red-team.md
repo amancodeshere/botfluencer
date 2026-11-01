@@ -416,8 +416,10 @@ own publication, enter the priority scan. New archive rows remain unverified.
 Separate diagnostic observation markers preserve first-observed payloads and
 priority across restarts; they never authorize publishing. Fresh ancestry,
 accepted-parent proof, same-account continuation, pending-root blocks, cooldowns
-and turn/depth limits remain enforced. Conversations get first editorial discovery
-before ordinary replies and original-post scheduling.
+and turn/depth limits remain enforced. Conversation-priority probes use the bounded own-thread hints, so unrelated
+archive replies cannot consume that probe. Ordinary NPC replies remain a separate
+lane. Conversations get first editorial discovery before ordinary replies and
+original-post scheduling.
 
 Mention opt-in permits a single leading `@username` in an NPC reply, using the
 current `/accounts/{author_id}` profile. Execution independently checks the live

@@ -106,6 +106,7 @@ async def test_own_response_scanner_excludes_unknown_authors_and_prioritises_kno
     repo: Repository,
 ):
     store = await conversation_store(repo)
+    store.config.prioritize_conversations = True
     await successful_reply(store, 123)
     now = datetime.now(UTC)
     reply = {
@@ -147,5 +148,5 @@ async def test_own_response_scanner_excludes_unknown_authors_and_prioritises_kno
                 )
             )
     candidates = await store.continuation_candidates(frozenset({7}))
-    assert candidates[0].external_id == "999"
+    assert [item.external_id for item in candidates] == ["999"]
     assert all(item.external_id not in {"1000", "1001"} for item in candidates)
