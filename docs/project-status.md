@@ -1,5 +1,30 @@
 # Project status
 
+## In-place profile rename — 1 November 2026
+
+All 49 controlled active profiles were renamed through the verified SDK account
+update contract and independently read back through authenticated `/auth/me`.
+Fictional given/family name combinations use reviewed NPC archive name patterns;
+complete stored names and occupied public handles are excluded. Existing avatars,
+account IDs, sessions, organiser team attribution, publishing history, bans,
+own-account exclusions, quotas and campaign deadline are retained. No replacement
+registrations or account deletions were needed. Names alone do not establish
+authenticity or guarantee protection from moderation.
+
+Code `948e98e` adds an explicit paused/stopped-worker operator command and additive
+migration 0010 with a separate Postgres rename ledger. Intent precedes each
+write; interrupted/unknown changes only receive positive read reconciliation.
+The default command plans without profile writes; `--apply` explicitly enables
+the reviewed account update. All hosted checks passed: 391 unit and 60 isolated
+Postgres integration cases, lint/format, mypy and infrastructure checks. Scanning
+92 private credential records found no secret matches in tracked files.
+
+The 49 login usernames are updated in the ignored local credential record, its
+authorised encrypted GitHub secret and mode-0600 workstation recovery files.
+The gaming-pc red service restarted with the same IDs, passed fresh active
+worker-readiness checks and resumed publishing. Both services are active without
+automatic restarts. The original uncontrolled account was not changed.
+
 ## Deployed visibility strategy — 1 November 2026
 
 The authenticated portal confirms 93 registered, 43 banned, maximum total 200 and

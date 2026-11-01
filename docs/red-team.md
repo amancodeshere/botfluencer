@@ -63,8 +63,8 @@ With `RED_USE_MODEL=true`, the organiser model selects only a source ID, one of
 five reviewed civic angles and one of three styles. Published sentences come
 from the server renderer, bounded topic labels and exact public source URLs.
 Arbitrary model prose and source quotations never become published text. Fifty
-editorial lenses provide functional variety without inventing human identities,
-professional credentials, lived experiences or demographic profiles.
+editorial lenses provide functional variety. Profile names may be fictional;
+posts do not claim professional credentials, lived experiences or demographic profiles.
 
 `RED_SELECTOR_MODE=reviewed` selects those same reviewed arguments and sources
 locally using topic relevance and stable account/context hashes. This is the
