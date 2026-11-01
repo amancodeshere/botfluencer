@@ -408,15 +408,7 @@ class EngagementStore(RedStore):
             )
             if disabled:
                 return None
-            pending = await session.scalar(
-                select(func.count())
-                .select_from(Action)
-                .where(
-                    Action.namespace == self.namespace,
-                    Action.status.in_(("queued", "in_flight")),
-                )
-            )
-            if int(pending or 0) >= self.config.max_pending_actions:
+            if not await self.pending_capacity(session, kind):
                 return None
             source: Action | None = None
             saved_body_hash = body_hash

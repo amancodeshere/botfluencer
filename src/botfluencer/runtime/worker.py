@@ -155,6 +155,9 @@ class Worker:
         except TimeoutError:
             pass
 
+    async def before_leadership_release(self) -> None:
+        """Stop child work before releasing the namespace ownership connection."""
+
     async def run(self, ticks: int | None = None) -> None:
         try:
             async with asyncio.timeout(self.settings.operation_timeout_seconds):
@@ -171,37 +174,40 @@ class Worker:
                         await connection.commit()
                         async with asyncio.timeout(self.settings.operation_timeout_seconds):
                             await self.repo.recover()
-                        completed = 0
-                        read_failures = 0
-                        while not self.stop.is_set():
-                            async with asyncio.timeout(self.settings.operation_timeout_seconds):
-                                if connection.closed or connection.invalidated:
-                                    raise RuntimeError("Worker ownership connection was lost")
-                                current_pid = await connection.scalar(
-                                    text("SELECT pg_backend_pid()")
-                                )
-                                if current_pid != owner_pid:
-                                    raise RuntimeError("Worker ownership connection changed")
-                                await connection.commit()
-                                try:
-                                    await self.tick()
-                                except SafeRetry as error:
-                                    read_failures += 1
-                                    if read_failures >= self.settings.max_action_attempts:
-                                        raise RuntimeError(
-                                            "Observation retries exhausted"
-                                        ) from None
-                                    delay = self.retry_delay(
-                                        read_failures, error.retry_after_seconds
+                        try:
+                            completed = 0
+                            read_failures = 0
+                            while not self.stop.is_set():
+                                async with asyncio.timeout(self.settings.operation_timeout_seconds):
+                                    if connection.closed or connection.invalidated:
+                                        raise RuntimeError("Worker ownership connection was lost")
+                                    current_pid = await connection.scalar(
+                                        text("SELECT pg_backend_pid()")
                                     )
-                                    event("observation_retry_scheduled", attempt=read_failures)
-                                else:
-                                    read_failures = 0
-                                    delay = self.settings.poll_interval_seconds
-                                    completed += 1
-                            if ticks is not None and completed >= ticks:
-                                return
-                            await self.sleep(delay)
+                                    if current_pid != owner_pid:
+                                        raise RuntimeError("Worker ownership connection changed")
+                                    await connection.commit()
+                                    try:
+                                        await self.tick()
+                                    except SafeRetry as error:
+                                        read_failures += 1
+                                        if read_failures >= self.settings.max_action_attempts:
+                                            raise RuntimeError(
+                                                "Observation retries exhausted"
+                                            ) from None
+                                        delay = self.retry_delay(
+                                            read_failures, error.retry_after_seconds
+                                        )
+                                        event("observation_retry_scheduled", attempt=read_failures)
+                                    else:
+                                        read_failures = 0
+                                        delay = self.settings.poll_interval_seconds
+                                        completed += 1
+                                if ticks is not None and completed >= ticks:
+                                    return
+                                await self.sleep(delay)
+                        finally:
+                            await self.before_leadership_release()
                 except LeadershipBusy:
                     await self.sleep(self.settings.poll_interval_seconds)
         except BaseException:

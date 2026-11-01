@@ -1,5 +1,6 @@
 """Bounded visibility experiments using acknowledged own and reviewed NPC posts."""
 
+import asyncio
 import hashlib
 import time
 from typing import Any, Literal, cast
@@ -21,6 +22,7 @@ class EngagementPlanner:
         self.next_refresh = 0.0
         self.ranked_until = 0.0
         self.ranked: frozenset[int] = frozenset()
+        self.refresh_lock = asyncio.Lock()
 
     async def refresh_trending(self) -> None:
         now = time.monotonic()
@@ -49,7 +51,7 @@ class EngagementPlanner:
         self.next_refresh = self.ranked_until
         event("red_trending_observed", posts=len(ids))
 
-    async def prepare(self, *, own_only: bool) -> bool:
+    async def prepare(self, *, own_only: bool, kinds: tuple[str, ...] | None = None) -> bool:
         """Reserve at most one action; only the worker dispatcher performs writes."""
         if (
             not self.config.engagement_enabled
@@ -57,23 +59,31 @@ class EngagementPlanner:
             or await self.store.is_paused()
         ):
             return False
-        await self.refresh_trending()
+        async with self.refresh_lock:
+            await self.refresh_trending()
         if own_only:
             candidates = await self.store.own_candidates()
-            candidates.sort(key=lambda candidate: candidate["created_at"])
+            candidates.sort(
+                key=lambda candidate: candidate["created_at"],
+                reverse=getattr(self.config, "parallel_lanes", False),
+            )
         else:
             candidates = await self.store.npc_candidates(
                 self.npc_ids, limit=min(self.config.engagement_scan_limit, 8)
             )
         ranked = self.ranked if time.monotonic() < self.ranked_until else frozenset()
         for candidate in candidates[: self.config.engagement_scan_limit]:
-            if candidate["target_id"] in ranked:
+            if candidate["target_id"] in ranked and not (
+                own_only and getattr(self.config, "parallel_lanes", False)
+            ):
                 continue
-            if await self._reserve_candidate(candidate):
+            if await self._reserve_candidate(candidate, kinds=kinds):
                 return True
         return False
 
-    async def _reserve_candidate(self, candidate: dict[str, Any]) -> bool:
+    async def _reserve_candidate(
+        self, candidate: dict[str, Any], *, kinds: tuple[str, ...] | None = None
+    ) -> bool:
         limits = {
             "like": self.config.engagement_likes_per_target,
             "repost": self.config.engagement_reposts_per_target,
@@ -81,8 +91,12 @@ class EngagementPlanner:
         }
         # A first like, a repost and a substantive reply precede further likes.
         stages = [("like", 1), ("repost", 1), ("team_reply", 1), ("like", limits["like"])]
+        if getattr(self.config, "parallel_lanes", False):
+            stages.append(("repost", limits["repost"]))
         reserved = candidate.get("reserved", {})
         for name, stage_limit in stages:
+            if kinds is not None and name not in kinds:
+                continue
             if name == "team_reply" and candidate["target_type"] != "own":
                 continue
             kind = cast(Literal["like", "repost", "team_reply"], name)

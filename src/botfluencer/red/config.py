@@ -18,7 +18,9 @@ class RedSettings(BaseSettings):
     expected_team_id: int = Field(gt=0)
     starts_at: AwareDatetime
     ends_at: AwareDatetime
-    max_attempts: int = Field(default=1200, ge=1, le=8640)
+    max_attempts: int = Field(default=1200, ge=1, le=100000)
+    parallel_lanes: bool = False
+    like_concurrency: int = Field(default=4, ge=1, le=8)
     archive_namespace: str = Field(default="ctn-2026", pattern=r"^[a-zA-Z0-9_-]{1,64}$")
     sessions_json: SecretStr
     use_model: bool = False
@@ -28,15 +30,15 @@ class RedSettings(BaseSettings):
     gif_enabled: bool = False
     allow_threads: bool = False
     identity_timeout_seconds: float = Field(default=600, ge=30, le=900)
-    max_pending_actions: int = Field(default=4, ge=1, le=8)
+    max_pending_actions: int = Field(default=4, ge=1, le=32)
     post_interval_seconds: float = Field(default=300, ge=20)
     originals_per_reply: int = Field(default=1, ge=1, le=3)
     engagement_enabled: bool = False
     engagement_max_age_hours: float = Field(default=2, gt=0, le=2)
     engagement_likes_per_target: int = Field(default=3, ge=0, le=49)
-    engagement_reposts_per_target: int = Field(default=1, ge=0, le=1)
+    engagement_reposts_per_target: int = Field(default=1, ge=0, le=49)
     engagement_comments_per_target: int = Field(default=1, ge=0, le=1)
-    engagement_max_per_hour: int = Field(default=100, ge=1, le=180)
+    engagement_max_per_hour: int = Field(default=100, ge=1, le=1980)
     engagement_scan_limit: int = Field(default=8, ge=1, le=16)
     trending_refresh_seconds: float = Field(default=120, ge=30, le=600)
 

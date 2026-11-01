@@ -3,7 +3,6 @@
 import asyncio
 import hashlib
 import time
-from contextlib import suppress
 from typing import Literal
 
 from botfluencer.competition.errors import InvalidGeneration, RequestDeferred
@@ -43,6 +42,10 @@ class RedWorker(Worker):
         self._conversation_targets: frozenset[str] = frozenset()
         self.engagement_planner = engagement_planner
         self._next_engagement_reconciliation = 0.0
+        self._parallel_tasks: dict[str, asyncio.Task[None]] = {}
+        self._parallel_planners: dict[str, asyncio.Task[None]] = {}
+        self._parallel_publication_prefers_boost = False
+        self._parallel_plan_lock = asyncio.Lock()
 
     async def run(self, ticks: int | None = None) -> None:
         async with asyncio.timeout(self.config.identity_timeout_seconds):
@@ -72,10 +75,23 @@ class RedWorker(Worker):
         try:
             await super().run(ticks)
         finally:
-            if self._planner is not None:
-                self._planner.cancel()
-                with suppress(asyncio.CancelledError):
-                    await self._planner
+            await self._stop_background_work()
+
+    async def before_leadership_release(self) -> None:
+        """Stop all side-effecting tasks before the namespace lock is released."""
+        await self._stop_background_work()
+
+    async def _stop_background_work(self) -> None:
+        tasks = [*self._parallel_tasks.values(), *self._parallel_planners.values()]
+        if self._planner is not None:
+            tasks.append(self._planner)
+        for task in tasks:
+            task.cancel()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+        self._parallel_tasks.clear()
+        self._parallel_planners.clear()
+        self._planner = None
 
     async def _conversation_reply(
         self,
@@ -387,6 +403,9 @@ class RedWorker(Worker):
         return False
 
     async def contextual_tick(self) -> None:
+        if getattr(self.config, "parallel_lanes", False):
+            await self._parallel_contextual_tick()
+            return
         if self._planner is not None and self._planner.done():
             self._planner.result()
             self._planner = None
@@ -412,8 +431,118 @@ class RedWorker(Worker):
             campaign_active=active,
         )
 
+    async def _parallel_prepare_lane(self, lane: str) -> None:
+        planner = self.engagement_planner
+        if planner is None:
+            if lane == "publication":
+                await self._plan_editorial()
+            return
+        try:
+            async with asyncio.timeout(self.settings.operation_timeout_seconds):
+                if lane == "engagement":
+                    if time.monotonic() >= self._next_engagement_reconciliation:
+                        self._next_engagement_reconciliation = time.monotonic() + 120
+                        for intent in await planner.store.unknown_engagements():
+                            result = await self.executor.reconcile(intent)
+                            if result.state == "applied" and result.receipt is not None:
+                                await self.store.finish(
+                                    intent,
+                                    ActionStatus.SUCCEEDED,
+                                    "reconciled",
+                                    result.receipt.model_dump(),
+                                )
+                                event("red_engagement_reconciled", action_id=str(intent.id))
+                    capacity = max(
+                        0,
+                        self.config.max_pending_actions
+                        - await self.store.pending_count(kinds=("like",)),
+                    )
+                    for _ in range(min(getattr(self.config, "like_concurrency", 1), capacity)):
+                        async with self._parallel_plan_lock:
+                            reserved = await planner.prepare(own_only=True, kinds=("like",))
+                        if not reserved:
+                            break
+                else:
+                    self._parallel_publication_prefers_boost = (
+                        not self._parallel_publication_prefers_boost
+                    )
+                    if self._parallel_publication_prefers_boost:
+                        async with self._parallel_plan_lock:
+                            await planner.prepare(own_only=True, kinds=("repost", "team_reply"))
+                        await self._plan_editorial()
+                    else:
+                        await self._plan_editorial()
+                        async with self._parallel_plan_lock:
+                            await planner.prepare(own_only=True, kinds=("repost", "team_reply"))
+        except (RequestDeferred, SafeRetry, TimeoutError, ValueError):
+            event("red_parallel_planning_deferred", lane=lane)
+
+    def _check_parallel_tasks(self, tasks: dict[str, asyncio.Task[None]]) -> None:
+        failure: BaseException | None = None
+        for lane, task in tuple(tasks.items()):
+            if task.done():
+                error = task.exception()
+                del tasks[lane]
+                if error is not None and failure is None:
+                    failure = error
+        if failure is not None:
+            siblings = [*self._parallel_tasks.values(), *self._parallel_planners.values()]
+            for task in siblings:
+                task.cancel()
+                task.add_done_callback(
+                    lambda completed: None if completed.cancelled() else completed.exception()
+                )
+            raise failure
+
+    async def _dispatch_lane(self, lane: str, kinds: tuple[str, ...]) -> None:
+        intent = await self.store.claim(kinds=kinds)
+        if intent is not None:
+            await self.execute(intent)
+
+    async def _parallel_contextual_tick(self) -> None:
+        self._check_parallel_tasks(self._parallel_tasks)
+        self._check_parallel_tasks(self._parallel_planners)
+        self.state.paused = await self.store.is_paused()
+        active = self.config.starts_at <= self.executor.transport.clock() < self.config.ends_at
+        if not self.state.paused and active:
+            for lane, kinds in (
+                ("engagement", ("like",)),
+                ("publication", ("post", "reply", "repost", "team_reply")),
+            ):
+                pending = await self.store.pending_count(kinds=kinds)
+                if (
+                    lane not in self._parallel_planners
+                    and pending < self.config.max_pending_actions
+                ):
+                    self._parallel_planners[lane] = asyncio.create_task(
+                        self._parallel_prepare_lane(lane), name=f"red-{lane}-planner"
+                    )
+                concurrency = (
+                    min(getattr(self.config, "like_concurrency", 1), 8)
+                    if lane == "engagement"
+                    else 1
+                )
+                for index in range(concurrency):
+                    slot = f"{lane}:{index}"
+                    if slot not in self._parallel_tasks:
+                        self._parallel_tasks[slot] = asyncio.create_task(
+                            self._dispatch_lane(slot, kinds), name=f"red-{slot}-dispatcher"
+                        )
+        await self.store.heartbeat(self.id)
+        self.state.heartbeat_monotonic = time.monotonic()
+        event(
+            "red_worker_heartbeat",
+            worker_id=str(self.id),
+            paused=self.state.paused,
+            campaign_active=active,
+        )
+
     async def tick(self) -> None:
-        if getattr(self.config, "use_model", False) or getattr(self, "engagement_planner", None):
+        if (
+            getattr(self.config, "use_model", False)
+            or getattr(self, "engagement_planner", None)
+            or getattr(self.config, "parallel_lanes", False)
+        ):
             await self.contextual_tick()
             return
         self.state.paused = await self.store.is_paused()

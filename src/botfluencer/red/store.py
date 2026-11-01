@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from typing import cast
 from uuid import UUID
 
-from sqlalchemy import String, exists, func, or_, select
+from sqlalchemy import String, exists, func, or_, select, text, true
 from sqlalchemy import cast as sql_cast
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -702,16 +702,10 @@ class RedStore(Repository):
             now = cast(datetime, await session.scalar(select(func.now())))
             if not campaign.starts_at <= now < campaign.ends_at:
                 return False
-            if getattr(self.config, "engagement_enabled", False):
-                pending = await session.scalar(
-                    select(func.count())
-                    .select_from(Action)
-                    .where(
-                        Action.namespace == self.namespace,
-                        Action.status.in_(("queued", "in_flight")),
-                    )
-                )
-                if int(pending or 0) >= self.config.max_pending_actions:
+            if getattr(self.config, "engagement_enabled", False) or getattr(
+                self.config, "parallel_lanes", False
+            ):
+                if not await self.pending_capacity(session, draft.kind):
                     return False
             if continuation is not None:
                 if draft.kind != "reply" or not await self._valid_continuation(
@@ -795,7 +789,9 @@ class RedStore(Repository):
                 )
             return True
 
-    async def claim(self, allowed_accounts: list[str] | None = None) -> ActionIntent | None:
+    async def claim(
+        self, allowed_accounts: list[str] | None = None, *, kinds: tuple[str, ...] | None = None
+    ) -> ActionIntent | None:
         eligible = await self.active_accounts()
         if allowed_accounts is not None:
             eligible = [account for account in eligible if account in allowed_accounts]
@@ -808,9 +804,14 @@ class RedStore(Repository):
             now = cast(datetime, await session.scalar(select(func.now())))
             if campaign is None or not campaign.starts_at <= now < campaign.ends_at:
                 return None
-            if await self._used_total() >= campaign.max_attempts:
+            used = await session.scalar(
+                select(func.count())
+                .select_from(UsageEvent)
+                .where(UsageEvent.namespace == self.namespace, UsageEvent.kind == "action_attempt")
+            )
+            if int(used or 0) >= campaign.max_attempts:
                 return None
-            return await super().claim(eligible)
+            return await self._claim(session, eligible, kinds=kinds)
 
     async def has_pending(self) -> bool:
         async with self.db.sessions() as session:
@@ -825,7 +826,7 @@ class RedStore(Repository):
                 )
             )
 
-    async def pending_count(self) -> int:
+    async def pending_count(self, *, kinds: tuple[str, ...] | None = None) -> int:
         async with self.db.sessions() as session:
             return int(
                 await session.scalar(
@@ -834,10 +835,34 @@ class RedStore(Repository):
                     .where(
                         Action.namespace == self.namespace,
                         Action.status.in_(("queued", "in_flight")),
+                        Action.payload["kind"].as_string().in_(kinds)
+                        if kinds is not None
+                        else true(),
                     )
                 )
                 or 0
             )
+
+    async def pending_capacity(self, session: AsyncSession, kind: str) -> bool:
+        """Call under the campaign row lock so lanes cannot consume each other's slots."""
+        rows = await session.execute(
+            select(Action.payload["kind"].as_string(), func.count())
+            .where(Action.namespace == self.namespace, Action.status.in_(("queued", "in_flight")))
+            .group_by(text("1"))
+        )
+        counts: dict[str, int] = {str(kind): int(count) for kind, count in rows.all()}
+        maximum = self.config.max_pending_actions
+        if sum(counts.values()) >= maximum:
+            return False
+        if not getattr(self.config, "parallel_lanes", False):
+            return True
+        likes = int(counts.get("like", 0))
+        like_slots = max(1, maximum // 2)
+        return (
+            likes < like_slots
+            if kind == "like"
+            else sum(counts.values()) - likes < max(1, maximum - like_slots)
+        )
 
     async def _used_total(self) -> int:
         from botfluencer.storage.models import UsageEvent

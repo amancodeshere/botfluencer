@@ -95,7 +95,10 @@ class BlueStore:
                     NPCPost.time_stamp
                     >= datetime.now(UTC) - timedelta(hours=self.config.max_age_hours),
                 )
-                .order_by(NPCPost.time_stamp.desc(), NPCPost.post_id.desc())
+                # Drain the eligible backlog oldest-first. Selecting only the
+                # newest rows can starve older posts whenever arrivals exceed
+                # the per-cycle score limit.
+                .order_by(NPCPost.time_stamp.asc(), NPCPost.post_id.asc())
                 .limit(self.config.score_limit)
             )
             return [

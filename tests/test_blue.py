@@ -217,7 +217,7 @@ async def test_blue_recovery_pause_budgets_and_npc_exclusion(repo: Repository) -
 
     await archive.save([post(1, 11, True), post(2, 11), post(3, 22), post(4, 33), post(5, 33)])
     posts = await store.pending_posts("v1")
-    assert {p["post_id"] for p in posts} == {4, 5}
+    assert [p["post_id"] for p in posts] == [4, 5]
     await store.save_scores(posts, [0.999, 0.999], "v1", 0.99)
     await store.save_scores(posts, [0.999, 0.999], "v1", 0.99)
     async with repo.db.sessions() as session:

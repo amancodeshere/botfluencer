@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from typing import Any, cast
 from uuid import UUID
 
-from sqlalchemy import exists, func, select, update
+from sqlalchemy import exists, func, select, true, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -189,54 +189,63 @@ class Repository:
             session.add(UsageEvent(namespace=self.namespace, account=account, kind="llm_call"))
             return True
 
-    async def claim(self, allowed_accounts: list[str] | None = None) -> ActionIntent | None:
+    async def claim(
+        self, allowed_accounts: list[str] | None = None, *, kinds: tuple[str, ...] | None = None
+    ) -> ActionIntent | None:
         """Reserve an attempt and its budget before any adapter side effect."""
         async with self.db.sessions.begin() as session:
-            control = await self._control(session)
-            now = cast(datetime, await session.scalar(select(func.now())))
-            if control.paused or (
-                await self._used(session, "action_attempt", now)
-                >= self.settings.max_actions_per_hour
-            ):
-                return None
-            actions = await session.scalars(
-                select(Action)
-                .where(
-                    Action.namespace == self.namespace,
-                    Action.status == ActionStatus.QUEUED,
-                    Action.next_attempt_at <= now,
-                    Action.account.in_(
-                        self.settings.accounts if allowed_accounts is None else allowed_accounts
-                    ),
-                )
-                .order_by(Action.created_at, Action.id)
-                .with_for_update(skip_locked=True)
-            )
-            for action in actions:
-                if action.attempts >= self.settings.max_action_attempts:
-                    action.status = ActionStatus.FAILED
-                    continue
-                last = await session.scalar(
-                    select(func.max(UsageEvent.created_at)).where(
-                        UsageEvent.namespace == self.namespace,
-                        UsageEvent.account == action.account,
-                        UsageEvent.kind == "action_attempt",
-                    )
-                )
-                if (
-                    last is not None
-                    and (now - last).total_seconds() < self.settings.account_cooldown_seconds
-                ):
-                    continue
-                action.attempts += 1
-                action.status = ActionStatus.IN_FLIGHT
-                session.add(
-                    UsageEvent(
-                        namespace=self.namespace, account=action.account, kind="action_attempt"
-                    )
-                )
-                return self._intent(action)
+            return await self._claim(session, allowed_accounts, kinds=kinds)
+
+    async def _claim(
+        self,
+        session: AsyncSession,
+        allowed_accounts: list[str] | None,
+        *,
+        kinds: tuple[str, ...] | None = None,
+    ) -> ActionIntent | None:
+        control = await self._control(session)
+        now = cast(datetime, await session.scalar(select(func.now())))
+        if control.paused or (
+            await self._used(session, "action_attempt", now) >= self.settings.max_actions_per_hour
+        ):
             return None
+        actions = await session.scalars(
+            select(Action)
+            .where(
+                Action.namespace == self.namespace,
+                Action.status == ActionStatus.QUEUED,
+                Action.payload["kind"].as_string().in_(kinds) if kinds is not None else true(),
+                Action.next_attempt_at <= now,
+                Action.account.in_(
+                    self.settings.accounts if allowed_accounts is None else allowed_accounts
+                ),
+            )
+            .order_by(Action.created_at, Action.id)
+            .with_for_update(skip_locked=True)
+        )
+        for action in actions:
+            if action.attempts >= self.settings.max_action_attempts:
+                action.status = ActionStatus.FAILED
+                continue
+            last = await session.scalar(
+                select(func.max(UsageEvent.created_at)).where(
+                    UsageEvent.namespace == self.namespace,
+                    UsageEvent.account == action.account,
+                    UsageEvent.kind == "action_attempt",
+                )
+            )
+            if (
+                last is not None
+                and (now - last).total_seconds() < self.settings.account_cooldown_seconds
+            ):
+                continue
+            action.attempts += 1
+            action.status = ActionStatus.IN_FLIGHT
+            session.add(
+                UsageEvent(namespace=self.namespace, account=action.account, kind="action_attempt")
+            )
+            return self._intent(action)
+        return None
 
     @staticmethod
     def _intent(action: Action) -> ActionIntent:

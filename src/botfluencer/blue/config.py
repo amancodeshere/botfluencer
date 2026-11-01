@@ -22,7 +22,7 @@ class BlueSettings(BaseSettings):
     expected_team_id: StrictInt | None = Field(default=None, gt=0)
     max_catchup_pages: int = Field(default=10000, ge=10, le=100000)
     max_pending_reports: int = Field(default=1, ge=1, le=5)
-    max_reports_per_hour: int = Field(default=3, ge=1, le=30)
+    max_reports_per_hour: int = Field(default=3, ge=1, le=180)
 
     @field_validator("own_author_ids")
     @classmethod

@@ -161,3 +161,10 @@ authorization that appends the previous/new window to an audit. The current cap,
 namespace, usage, unknown actions, reservations and historical identities survive.
 Old queued actions receive expiry outcomes. Normal startup never extends a window.
 See [visibility operations](trending.md) for contracts, bounds and settings.
+
+Opt-in parallel red lanes use several bounded async worker tasks inside the
+single namespace owner. Kind-filtered claims share one campaign/control locking
+transaction and pool connection, preserving aggregate budgets while avoiding
+nested-pool exhaustion. Like/publication queue capacity is reserved independently.
+Background dispatchers and planners are cancelled and gathered before releasing
+the ownership connection. Blue remains a separate process with its own singleton.

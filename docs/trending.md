@@ -94,3 +94,31 @@ match and never renews automatically. Replenishment uses fresh portal counts and
 the existing recovery-aware provisioning/amendment workflow. Resume after schema,
 roster and context verification. Never delete or re-namespace a campaign to evade
 a stop or budget. Credentials and competition exports remain outside Git.
+
+## Parallel throughput opt-in
+
+`RED_PARALLEL_LANES=true` runs independent bounded like and publication tasks
+under the same namespace owner. `RED_LIKE_CONCURRENCY` is 1–8 (default 4).
+Publication dispatch remains single-file: posts, NPC replies, reposts and team
+comments share the official 3/minute bucket. Likes use their separate 30/minute
+bucket. Background work stops before ownership is released; all tasks retain
+persisted intent, unknown-result recovery and the shared team pacer. Default
+serial behavior remains unchanged.
+
+The publication planner gives both editorial and boost work turns; like batches
+have separate planning and execution. Half the pending queue is reserved for
+likes, half for publications, enforced inside the campaign transaction. Parallel
+own-post likes may continue after observed Trending entry; NPC provenance remains
+unchanged. Recent own posts receive priority. Configurable repost caps support
+multiple distinct peers but cannot enlarge the shared publishing allowance.
+
+The requested deployment prioritises originals and NPC replies, with one repost
+and one reviewed team comment per original, up to 48 peer likes, 8 like dispatchers,
+16 pending slots, 1-minute original spacing and a 20-second publication floor.
+Hourly ceilings are 1,980 total attempts and 1,800 engagement reservations;
+these are ceilings, not measured throughput. Increasing the cumulative cap uses
+the existing paused, verified `red amend` audit rather than resetting history.
+The requested deployment cap is 50,000 attempts with the existing deadline.
+A stopped-owner pacing adjustment from the old 30-second floor to 20 seconds
+must preserve `next_allowed_at`, including existing backoff; subsequent server
+headers and 429s remain authoritative.

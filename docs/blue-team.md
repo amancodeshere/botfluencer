@@ -83,6 +83,9 @@ at runtime or enables remote model code. Model files and inference settings have
 checksums; activation uses an atomic symlink. Initial ML imports on the Windows
 D: mount can take minutes. Warm latency depends on backlog and shared quota;
 30 seconds is a polling target, not a guaranteed end-to-end deadline.
+Eligible posts are scored oldest-first so a feed backlog larger than the per-cycle
+score cap does not indefinitely defer older observations. The 24-hour age cutoff
+still applies, so a sustained arrival rate above inference capacity can age posts out.
 
 Known NPCs, configured own accounts, empty bodies, and posts older than 24 hours
 are excluded before inference. At least two distinct high-scoring texts from
@@ -141,7 +144,8 @@ Private configuration belongs in `~/.config/botfluencer/blue.env` (0600):
 | `BLUE_OWN_AUTHOR_IDS` | JSON list of your actual account IDs; required before reports |
 | `BLUE_SESSION_TOKEN` | private own-account token, installed outside the checkout |
 | `BLUE_REPORTER_ACCOUNT_ID` / `BLUE_EXPECTED_TEAM_ID` | required matching account/team IDs, authenticated before dispatch |
-| `BLUE_SCORE_LIMIT` / `BLUE_BATCH_SIZE` | defaults 128 / 8; installed 256 / 8 |
+| `BLUE_SCORE_LIMIT` / `BLUE_BATCH_SIZE` | defaults 128 / 8; installed 256 / 8; consider 512 / 8 for a larger backlog |
+| `BLUE_MAX_PAGES` | default 3; consider 4 as a catch-up ceiling when team feed usage leaves at least 2 reads/minute for others |
 | `BLUE_MAX_PENDING_REPORTS` | 1 unresolved submission |
 | `BLUE_MAX_REPORTS_PER_HOUR` | 3 attempted submissions, persisted team-wide |
 
@@ -154,6 +158,14 @@ with author-disjoint independently reviewed real labels: at least 100 positives,
 400 negatives, lower 95% precision bound >=0.95, upper 95% FPR bound <=0.01.
 These are conservative local policies, not competition rules or a guarantee.
 Changing environment settings requires restarting the user service.
+The catch-up ceiling is not a target rate: normal polling stops at the saved newest
+anchor, while an active catch-up may use up to four feed reads every 30 seconds
+(eight/minute). This leaves two of the documented ten shared feed reads/minute for
+other team activity only when no other consumer is already using that allowance.
+Coordinate the cap with teammates and the shared pacer before raising it. Increase
+the score limit to 512 only after confirming warm GPU time and queue age on
+gaming-pc; batch size 8 keeps the existing GPU memory profile. Reducing the poll
+interval is not recommended because it multiplies catch-up pressure.
 
 Inspect candidate metadata with `botfluencer blue candidates --limit 20`, using
 both private runtime and blue environment files. `--include-excerpt` adds bounded
