@@ -204,6 +204,16 @@ class EngagementStore(RedStore):
             healthy = sorted(set(campaign.accounts) & set(self.settings.accounts) - disabled)
             if not healthy:
                 return []
+            reviewed_authors = set(
+                await session.scalars(
+                    select(NPCPost.author_id)
+                    .where(
+                        NPCPost.namespace == self.config.archive_namespace,
+                        NPCPost.npc_status == "npc",
+                    )
+                    .distinct()
+                )
+            )
             conflicted = set(
                 await session.scalars(
                     select(NPCPost.author_id)
@@ -219,8 +229,7 @@ class EngagementStore(RedStore):
                 .where(
                     NPCPost.namespace == self.config.archive_namespace,
                     NPCPost.kind == "post",
-                    NPCPost.npc_status == "npc",
-                    NPCPost.author_id.in_(npc_ids),
+                    NPCPost.author_id.in_((set(npc_ids) & reviewed_authors) - conflicted),
                     NPCPost.post.is_not(None),
                     NPCPost.time_stamp >= now - max_age,
                     NPCPost.time_stamp <= now,
@@ -234,7 +243,6 @@ class EngagementStore(RedStore):
                 if row.post
                 and row.post.strip()
                 and is_reviewed_yes_target(row.post)
-                and row.author_id not in conflicted
                 and str(row.author_id) not in campaign.accounts
             ][:limit]
             state = await self._reservation_state(session, [row.post_id for row in candidates])
@@ -323,6 +331,28 @@ class EngagementStore(RedStore):
         if disabled:
             return None
         return source, body
+
+    async def _npc_author_reviewed(self, session: Any, author_id: int) -> bool:
+        """Require archived NPC provenance and no contradictory player label."""
+        reviewed = await session.scalar(
+            select(
+                exists().where(
+                    NPCPost.namespace == self.config.archive_namespace,
+                    NPCPost.author_id == author_id,
+                    NPCPost.npc_status == "npc",
+                )
+            )
+        )
+        player = await session.scalar(
+            select(
+                exists().where(
+                    NPCPost.namespace == self.config.archive_namespace,
+                    NPCPost.author_id == author_id,
+                    NPCPost.npc_status == "player",
+                )
+            )
+        )
+        return bool(reviewed) and not bool(player)
 
     async def reserve_engagement(
         self,
@@ -413,7 +443,6 @@ class EngagementStore(RedStore):
                     post is None
                     or post.author_id != author_id
                     or post.kind != "post"
-                    or post.npc_status != "npc"
                     or post.post is None
                     or not post.post.strip()
                     or post.time_stamp < now - max_age
@@ -423,16 +452,7 @@ class EngagementStore(RedStore):
                     or body_hash != body_digest(post.post)
                 ):
                     return None
-                conflicting = await session.scalar(
-                    select(
-                        exists().where(
-                            NPCPost.namespace == self.config.archive_namespace,
-                            NPCPost.author_id == author_id,
-                            NPCPost.npc_status == "player",
-                        )
-                    )
-                )
-                if conflicting:
+                if not await self._npc_author_reviewed(session, author_id):
                     return None
                 saved_body_hash = body_digest(post.post)
             else:
@@ -629,26 +649,16 @@ class EngagementStore(RedStore):
                 post = await session.get(
                     NPCPost, (self.config.archive_namespace, reservation.target_id)
                 )
-                conflict = await session.scalar(
-                    select(
-                        exists().where(
-                            NPCPost.namespace == self.config.archive_namespace,
-                            NPCPost.author_id == reservation.author_id,
-                            NPCPost.npc_status == "player",
-                        )
-                    )
-                )
                 if (
                     post is None
                     or post.author_id != reservation.author_id
                     or post.kind != "post"
-                    or post.npc_status != "npc"
                     or post.post is None
                     or post.time_stamp < now - max_age
                     or post.time_stamp > now
                     or not is_reviewed_yes_target(post.post)
                     or body_digest(post.post) != reservation.body_hash
-                    or conflict
+                    or not await self._npc_author_reviewed(session, reservation.author_id)
                 ):
                     return None
                 saved_hash = body_digest(post.post)

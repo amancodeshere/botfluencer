@@ -559,3 +559,118 @@ async def test_reservations_deduplicate_across_policy_versions_and_enforce_per_p
         )
         is None
     )
+
+
+@pytest.mark.integration
+async def test_fresh_unverified_npc_posts_require_unconflicted_reviewed_author_history(
+    repo: Repository,
+) -> None:
+    repo.settings.accounts = ["10"]
+    store = EngagementStore(repo.db)
+    store.scope = "npc-provenance-" + uuid4().hex
+    store.config = engagement_config("npc-archive-" + uuid4().hex)
+    await store.initialize()
+    now = datetime.now(UTC)
+    async with repo.db.sessions.begin() as session:
+        session.add_all(
+            [
+                # A seed older than the engagement freshness window remains author evidence.
+                NPCPost(
+                    namespace=store.config.archive_namespace,
+                    post_id=801,
+                    author_id=7,
+                    post="Historical reviewed NPC seed.",
+                    time_stamp=now - timedelta(hours=3),
+                    kind="post",
+                    npc_status="npc",
+                ),
+                NPCPost(
+                    namespace=store.config.archive_namespace,
+                    post_id=811,
+                    author_id=7,
+                    post=NPC_BODY,
+                    time_stamp=now - timedelta(minutes=1),
+                    kind="post",
+                    npc_status="unverified",
+                ),
+                # Freshness and a positive body alone cannot establish NPC provenance.
+                NPCPost(
+                    namespace=store.config.archive_namespace,
+                    post_id=812,
+                    author_id=8,
+                    post=NPC_BODY,
+                    time_stamp=now - timedelta(minutes=1),
+                    kind="post",
+                    npc_status="unverified",
+                ),
+                NPCPost(
+                    namespace=store.config.archive_namespace,
+                    post_id=821,
+                    author_id=9,
+                    post="Historical reviewed NPC seed.",
+                    time_stamp=now - timedelta(hours=3),
+                    kind="post",
+                    npc_status="npc",
+                ),
+                # A conflict at any age revokes author-level positive evidence.
+                NPCPost(
+                    namespace=store.config.archive_namespace,
+                    post_id=822,
+                    author_id=9,
+                    post="Historical player classification.",
+                    time_stamp=now - timedelta(days=1),
+                    kind="post",
+                    npc_status="player",
+                ),
+                NPCPost(
+                    namespace=store.config.archive_namespace,
+                    post_id=823,
+                    author_id=9,
+                    post=NPC_BODY,
+                    time_stamp=now - timedelta(minutes=1),
+                    kind="post",
+                    npc_status="unverified",
+                ),
+            ]
+        )
+
+    reviewed = await store.npc_ids()
+    assert reviewed == frozenset({7})
+    candidates = await store.npc_candidates(reviewed)
+    assert [candidate["target_id"] for candidate in candidates] == [811]
+    assert candidates[0]["author_id"] == 7
+    assert candidates[0]["body_hash"] == body_digest(NPC_BODY)
+    assert candidates[0]["target_type"] == "npc"
+    assert (
+        await store.reserve_engagement(
+            "10",
+            811,
+            "like",
+            target_type="npc",
+            author_id=7,
+            body_hash=body_digest(NPC_BODY),
+        )
+        is not None
+    )
+    assert (
+        await store.reserve_engagement(
+            "10",
+            812,
+            "like",
+            target_type="npc",
+            author_id=8,
+            body_hash=body_digest(NPC_BODY),
+        )
+        is None
+    )
+    assert (
+        await store.reserve_engagement(
+            "10",
+            823,
+            "like",
+            target_type="npc",
+            author_id=9,
+            body_hash=body_digest(NPC_BODY),
+        )
+        is None
+    )

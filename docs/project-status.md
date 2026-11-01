@@ -20,6 +20,12 @@ Deployment, the audited new window and the 19-account replenishment follow after
 the verified stage is committed. No current Trending placement or score gain is
 claimed from these software checks.
 
+A follow-up permits fresh unverified post rows from historically reviewed NPC
+authors, while rejecting unknown authors and any conflicting player evidence.
+Identity provenance is reloaded independently during reservation and execution;
+current body hashes, age and structure remain checked. The dedicated Postgres
+regression passes. Deployment verification is ongoing.
+
 ## Second replenishment — 31 October 2026
 
 The user supplied a fresh portal snapshot: 72 registered, 24 banned, maximum
