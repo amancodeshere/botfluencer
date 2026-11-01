@@ -7,6 +7,7 @@ from uuid import UUID, uuid4
 
 from sqlalchemy import exists, func, select
 
+from botfluencer.competition.errors import RequestDeferred
 from botfluencer.domain import ActionIntent, Draft
 from botfluencer.red.engagement_policy import (
     body_digest,
@@ -384,9 +385,13 @@ class EngagementStore(RedStore):
             return None
         async with self.db.sessions.begin() as session:
             campaign = await session.scalar(
-                select(RedCampaign).where(RedCampaign.scope == self.scope).with_for_update()
+                select(RedCampaign)
+                .where(RedCampaign.scope == self.scope)
+                .with_for_update(skip_locked=getattr(self.config, "parallel_lanes", False))
             )
             if campaign is None:
+                if getattr(self.config, "parallel_lanes", False):
+                    raise RequestDeferred(1)
                 return None
             now = cast(datetime, await session.scalar(select(func.clock_timestamp())))
             control = await session.get(Control, self.namespace)

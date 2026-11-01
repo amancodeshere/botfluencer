@@ -427,3 +427,12 @@ username against the verified reply author immediately before publication. Wrong
 changed, unknown, own or extra addressees fail closed. There are no mass mentions
 or new notification-write endpoints; hashtags and mentions use the existing post
 body contract. Replies already notify the author through the platform.
+
+Parallel claims and reservations skip a busy campaign row; planning defers before
+intent mutation rather than waiting behind another lane. Editorial and boost
+intent planning share a cooperative mutex. Publication planning takes the pause
+control lock only immediately before inserting intent, rechecking pause under
+that lock; heartbeat updates do not wait through all planning checks. Contention
+regression tests hold the campaign row deliberately and verify bounded deferral
+with no attempt or intent created. Database failure diagnostics contain only
+exception type and SQLSTATE, never SQL statements, credentials or exception text.

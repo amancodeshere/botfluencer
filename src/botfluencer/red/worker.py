@@ -3,6 +3,7 @@
 import asyncio
 import hashlib
 import time
+from contextlib import nullcontext
 from typing import Literal
 
 import httpx
@@ -410,14 +411,20 @@ class RedWorker(Worker):
                     or self.executor.transport.clock() >= self.config.ends_at
                 ):
                     return False
-                planned = await self.store.plan_reply(
-                    observation.id,
-                    int(item.metadata.get("author_id", 0)),
-                    account,
-                    draft,
-                    prompt_version=generator.prompt_version,
-                    continuation=continuation,
+                guard = (
+                    self._parallel_plan_lock
+                    if getattr(self.config, "parallel_lanes", False)
+                    else nullcontext()
                 )
+                async with guard:
+                    planned = await self.store.plan_reply(
+                        observation.id,
+                        int(item.metadata.get("author_id", 0)),
+                        account,
+                        draft,
+                        prompt_version=generator.prompt_version,
+                        continuation=continuation,
+                    )
                 if not planned and continuation is None:
                     await self.store.skip(
                         observation.id,
@@ -538,6 +545,14 @@ class RedWorker(Worker):
                 if error is not None and failure is None:
                     failure = error
         if failure is not None:
+            state = getattr(getattr(failure, "orig", None), "sqlstate", None)
+            event(
+                "red_background_failed",
+                error_type=type(failure).__name__,
+                sqlstate=state
+                if isinstance(state, str) and len(state) == 5 and state.isalnum()
+                else None,
+            )
             siblings = [*self._parallel_tasks.values(), *self._parallel_planners.values()]
             for task in siblings:
                 task.cancel()

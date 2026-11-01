@@ -10,12 +10,14 @@ from sqlalchemy import cast as sql_cast
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from botfluencer.competition.errors import RequestDeferred
 from botfluencer.domain import ActionIntent, Draft, ObservationInput
 from botfluencer.red.config import RedSettings
 from botfluencer.red.conversation import AcceptedParent, Continuation
 from botfluencer.red.policy import TOPIC_TERMS
 from botfluencer.storage.models import (
     Action,
+    Control,
     Decision,
     NPCPost,
     Observation,
@@ -708,9 +710,13 @@ class RedStore(Repository):
     ) -> bool:
         async with self.db.sessions.begin() as session:
             campaign = await session.scalar(
-                select(RedCampaign).where(RedCampaign.scope == self.scope).with_for_update()
+                select(RedCampaign)
+                .where(RedCampaign.scope == self.scope)
+                .with_for_update(skip_locked=getattr(self.config, "parallel_lanes", False))
             )
             if campaign is None:
+                if getattr(self.config, "parallel_lanes", False):
+                    raise RequestDeferred(1)
                 raise RuntimeError("Campaign is not initialized")
             disabled = await session.scalar(
                 select(RedAccountControl.disabled).where(
@@ -723,8 +729,8 @@ class RedStore(Repository):
                 or account not in campaign.accounts
             ):
                 return False
-            control = await self._control(session)
-            if control.paused:
+            control = await session.get(Control, self.namespace)
+            if control is None or control.paused:
                 return False
             now = cast(datetime, await session.scalar(select(func.now())))
             if not campaign.starts_at <= now < campaign.ends_at:
@@ -777,6 +783,13 @@ class RedStore(Repository):
             )
             if existing is not None or decided is not None:
                 return False
+            # Retain atomic pause semantics, but take the control lock only for
+            # intent insertion so heartbeat updates do not wait through all preflight queries.
+            paused = await session.scalar(
+                select(Control.paused).where(Control.namespace == self.namespace).with_for_update()
+            )
+            if paused is not False:
+                return False
             decision = Decision(
                 namespace=self.namespace,
                 key=self.key(draft.target_id),
@@ -826,7 +839,9 @@ class RedStore(Repository):
             return None
         async with self.db.sessions.begin() as session:
             campaign = await session.scalar(
-                select(RedCampaign).where(RedCampaign.scope == self.scope).with_for_update()
+                select(RedCampaign)
+                .where(RedCampaign.scope == self.scope)
+                .with_for_update(skip_locked=getattr(self.config, "parallel_lanes", False))
             )
             now = cast(datetime, await session.scalar(select(func.now())))
             if campaign is None or not campaign.starts_at <= now < campaign.ends_at:

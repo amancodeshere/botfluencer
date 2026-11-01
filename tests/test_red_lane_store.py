@@ -64,6 +64,10 @@ async def test_concurrent_filtered_claims_are_disjoint_and_pending_counts_are_la
         store.claim(kinds=("reply",)),
         store.claim(kinds=("post",)),
     )
+    if reply_claim is None:
+        reply_claim = await store.claim(kinds=("reply",))
+    if post_claim is None:
+        post_claim = await store.claim(kinds=("post",))
     assert reply_claim is not None and reply_claim.draft.kind == "reply"
     assert post_claim is not None and post_claim.draft.kind == "post"
     assert reply_claim.id != post_claim.id
@@ -166,3 +170,33 @@ async def test_parallel_planning_reserves_capacity_for_each_lane(repo: Repositor
     assert not await plan(406, "like")
     assert await store.pending_count(kinds=("post",)) == 2
     assert await store.pending_count(kinds=("like",)) == 2
+
+
+@pytest.mark.integration
+async def test_busy_campaign_defers_parallel_claim_and_planning_without_waiting(repo: Repository):
+    from sqlalchemy import select
+
+    from botfluencer.competition.errors import RequestDeferred
+
+    repo.settings.accounts = ["10"]
+    store = RedStore(repo.db)
+    store.scope = "busy-lane-" + uuid4().hex
+    store.config = red_config("archive-" + uuid4().hex)
+    await store.initialize()
+    await store.observe([ObservationInput(external_id="701", text="Synthetic", source="social")])
+    observation = await store.find_observation("701")
+    assert observation is not None
+    async with repo.db.sessions.begin() as session:
+        await session.scalar(
+            select(RedCampaign).where(RedCampaign.scope == store.scope).with_for_update()
+        )
+        async with asyncio.timeout(8):
+            assert await store.claim(kinds=("post",)) is None
+            with pytest.raises(RequestDeferred):
+                await store.plan_reply(
+                    observation.id,
+                    0,
+                    "10",
+                    Draft(kind="post", target_id="post:10:1", text="Synthetic"),
+                )
+    assert await store.pending_count() == 0

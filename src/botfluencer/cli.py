@@ -15,7 +15,7 @@ from botfluencer.blue.worker import watch as blue_watch
 from botfluencer.config import Settings
 from botfluencer.platform.collect import collect_posts
 from botfluencer.reporting.doctor import doctor
-from botfluencer.runtime.events import configure_logging
+from botfluencer.runtime.events import configure_logging, event
 from botfluencer.runtime.service import run_worker, serve
 from botfluencer.storage.database import Database
 from botfluencer.storage.migrations import upgrade
@@ -279,6 +279,9 @@ def main() -> None:
         print(f"Invalid configuration: {', '.join(fields)}", file=sys.stderr)
         sys.exit(2)
     except Exception as error:
+        state = getattr(getattr(error, "orig", None), "sqlstate", None)
+        if isinstance(state, str) and len(state) == 5 and state.isalnum():
+            event("database_command_failed", sqlstate=state)
         print(
             f"Command failed ({type(error).__name__}); see the operating runbook", file=sys.stderr
         )
