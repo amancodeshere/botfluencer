@@ -67,6 +67,8 @@ serializes integration runs. Read [operations](docs/operations.md) for details.
   Opt-in parallel like/publication tasks share one namespace owner and team quotas.
   Optional observed hashtags, verified NPC reply mentions and own-thread discovery
   give NPC conversations priority within the same durable limits.
+  Grounded editorial mode adds screened article evidence, topic-specific replies
+  and persistent recent-wording checks.
 - [Visibility strategy](docs/trending.md): opt-in own-post engagement, reviewed NPC
   support, actual Trending snapshots and audited subsequent campaign windows.
 - [GPU workstation](docs/gaming-pc.md): gaming-pc SSH, Mamba, CUDA, and local training checks.

@@ -294,6 +294,12 @@ class RedWorker(Worker):
                     max_world_age_hours=self.config.max_world_age_hours,
                     gif_enabled=self.config.gif_enabled,
                     use_llm=getattr(self.config, "selector_mode", "llm") == "llm",
+                    grounded=getattr(self.config, "grounded_content", False),
+                    recent_texts=(
+                        await self.store.recent_publication_texts()
+                        if getattr(self.config, "grounded_content", False)
+                        else ()
+                    ),
                 )
                 account = await self.store.next_account()
                 original_due, latest_kind = await self.store.planning_preference()
@@ -355,7 +361,14 @@ class RedWorker(Worker):
                         external_id=f"post:{account}:{slot}",
                         text=source.title,
                         source="news",
-                        metadata={"world_digest": world.digest},
+                        metadata={
+                            "world_digest": world.digest,
+                            **(
+                                {"source_id": source.id}
+                                if getattr(self.config, "grounded_content", False)
+                                else {}
+                            ),
+                        },
                     )
                     await self.store.observe([item])
                     # Look up this exact internal planning observation, not an unrelated oldest row.
@@ -371,9 +384,19 @@ class RedWorker(Worker):
                 if (
                     getattr(self.config, "selector_mode", "llm") == "llm"
                     and continuation is None
+                    and not getattr(self.config, "grounded_content", False)
                     and not await self.store.reserve_generation(account)
                 ):
                     return False
+                if continuation is not None and getattr(self.config, "grounded_content", False):
+                    parent_text = await self.store.parent_publication_text(
+                        continuation.parent_action_id
+                    )
+                    item = item.model_copy(
+                        update={
+                            "metadata": dict(item.metadata, conversation_parent_text=parent_text)
+                        }
+                    )
                 order = sorted(self.settings.accounts).index(account)
                 draft = await generator.generate(
                     item,

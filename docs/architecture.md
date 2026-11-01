@@ -169,3 +169,11 @@ transaction and pool connection, preserving aggregate budgets while avoiding
 nested-pool exhaustion. Like/publication queue capacity is reserved independently.
 Background dispatchers and planners are cancelled and gathered before releasing
 the ownership connection. Blue remains a separate process with its own singleton.
+
+Optional grounded editorial rendering binds original drafts to an exact source,
+quotes bounded screened evidence with attribution and retains its exact URL.
+Commentary remains reviewed civic text; model/source data cannot supply tool
+permission. Replies use the actual NPC point and acknowledged parent context.
+Recent persisted publication intents provide restart-safe duplicate checks. The
+classic renderer remains the default; both use the same validated Draft, action
+ledger, freshness, pacing, pause and execution contracts.

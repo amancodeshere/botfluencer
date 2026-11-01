@@ -28,6 +28,7 @@ class RedSettings(BaseSettings):
     world_context_file: Path | None = None
     max_world_age_hours: float = Field(default=6, gt=0, le=24)
     gif_enabled: bool = False
+    grounded_content: bool = False
     hashtags_enabled: bool = False
     mentions_enabled: bool = False
     prioritize_conversations: bool = False

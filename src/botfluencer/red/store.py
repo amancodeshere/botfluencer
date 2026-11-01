@@ -186,6 +186,30 @@ class RedStore(Repository):
                 used[account] = max(used.get(account, self.config.starts_at), stamp)
             return min(accounts, key=lambda a: (used.get(a, self.config.starts_at), a))
 
+    async def recent_publication_texts(self) -> tuple[str, ...]:
+        async with self.db.sessions() as session:
+            values = await session.scalars(
+                select(Action.payload["text"].as_string())
+                .where(
+                    Action.namespace == self.namespace,
+                    Action.payload["kind"].as_string().in_(("post", "reply")),
+                )
+                .order_by(Action.created_at.desc(), Action.id)
+                .limit(100)
+            )
+            return tuple(value for value in values if value)
+
+    async def parent_publication_text(self, action_id: UUID) -> str:
+        async with self.db.sessions() as session:
+            value = await session.scalar(
+                select(Action.payload["text"].as_string()).where(
+                    Action.namespace == self.namespace,
+                    Action.id == action_id,
+                    Action.status == "succeeded",
+                )
+            )
+            return value or ""
+
     async def planning_preference(self) -> tuple[bool, str | None]:
         """Read original cadence and the last durable planning turn together."""
         recent_original = exists().where(

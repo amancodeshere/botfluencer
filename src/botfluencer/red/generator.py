@@ -289,6 +289,8 @@ class ContextualGenerator:
         max_world_age_hours: float = 6,
         gif_enabled: bool = False,
         use_llm: bool = True,
+        grounded: bool = False,
+        recent_texts: tuple[str, ...] = (),
     ) -> None:
         if transport.settings.ctn_side != "Vote Yes":
             raise ValueError("Contextual red policy requires the verified Vote Yes assignment")
@@ -299,6 +301,10 @@ class ContextualGenerator:
         self.max_world_age_hours = max_world_age_hours
         self.gif_enabled = gif_enabled
         self.use_llm = use_llm
+        self.grounded = grounded
+        self.recent_texts = recent_texts
+        from botfluencer.red.editorial import COMMENTS, QUESTIONS, TOPICS, UNSAFE, VERSION
+
         self.prompt_version = hashlib.sha256(
             json.dumps(
                 {
@@ -317,6 +323,15 @@ class ContextualGenerator:
                     "selector_mode": "llm" if use_llm else "reviewed-topic-v1",
                     "gif_urls": sorted(ALLOWED_GIF_URLS),
                     "renderer_version": "contextual-red-selector-v4-conversation",
+                    "grounded": grounded,
+                    "grounded_policy": [
+                        VERSION,
+                        COMMENTS,
+                        QUESTIONS,
+                        TOPICS,
+                        UNSAFE.pattern,
+                        UNSAFE.flags,
+                    ],
                     "conversation_openings": CONVERSATION_OPENINGS,
                     "conversation_followups": CONVERSATION_FOLLOWUPS,
                 },
@@ -340,6 +355,32 @@ class ContextualGenerator:
             raise ValueError("Unknown community desk role")
         if conversation and kind != "reply":
             raise ValueError("Conversation generation requires a reply")
+        if self.grounded:
+            from botfluencer.red.editorial import render_grounded
+
+            selection = reviewed_selection(observation, account, kind, self.world, editorial_role)
+            if kind == "post":
+                source = next(
+                    (
+                        item
+                        for item in self.world.sources
+                        if item.title == observation.text
+                        and (
+                            observation.metadata.get("source_id") is None
+                            or item.id == observation.metadata["source_id"]
+                        )
+                    ),
+                    None,
+                )
+                if source is None:
+                    raise ValueError("Original has no exact source anchor")
+                selection.source_id = source.id
+            else:
+                source = next(item for item in self.world.sources if item.id == selection.source_id)
+            draft = render_grounded(
+                source, observation, account=account, kind=kind, recent_texts=self.recent_texts
+            )
+            return self._finish(draft, selection, account, kind, observation)
         if not self.use_llm or conversation:
             selection = reviewed_selection(observation, account, kind, self.world, editorial_role)
             draft = render_selection(

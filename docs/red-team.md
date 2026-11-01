@@ -62,7 +62,9 @@ and recent attempts so unused community desks receive turns.
 With `RED_USE_MODEL=true`, the organiser model selects only a source ID, one of
 five reviewed civic angles and one of three styles. Published sentences come
 from the server renderer, bounded topic labels and exact public source URLs.
-Arbitrary model prose and source quotations never become published text. Fifty
+Arbitrary model prose never becomes published text. The classic renderer omits
+source quotations; the separately enabled grounded renderer screens bounded
+verbatim evidence as described below. Fifty
 editorial lenses provide functional variety. Profile names may be fictional;
 posts do not claim professional credentials, lived experiences or demographic profiles.
 
@@ -436,3 +438,31 @@ that lock; heartbeat updates do not wait through all planning checks. Contention
 regression tests hold the campaign row deliberately and verify bounded deferral
 with no attempt or intent created. Database failure diagnostics contain only
 exception type and SQLSTATE, never SQL statements, credentials or exception text.
+
+## Grounded editorial content
+
+`RED_GROUNDED_CONTENT=true` enables a local evidence-grounded renderer without
+additional model calls. Default false retains the classic renderer. Originals
+must match their exact source ID/title. A bounded literal source sentence or
+headline is quoted with attribution and its unchanged citation URL; context
+metadata headers are never treated as article evidence. Instruction-like text,
+notification syntax, unsafe links/control characters and advice language fail
+closed. No factual paraphrases, statistics, expertise or policy guarantees are
+invented. Source text stays data, never instructions or tool permission.
+
+Commentary distinguishes corrections, voting process, campaign process, privacy,
+exemptions, access, oversight, logistics and polling. Several fact-first,
+question-first and opinion-first structures replace the shared publisher/topic
+prefix. A correction is not repackaged as an active warning. The actual NPC point
+selects reply content; a relevant source may answer a specific question, while an
+unrelated article link is omitted. Topic-free follow-ups use the acknowledged
+parent's text as context or ask for clarification. Authority still comes solely
+from the existing persisted/fresh conversation checks.
+
+The most recent 100 publication intents are compared after removing URLs, tags
+and mention prefixes. Queued, failed and ambiguous intents also participate;
+restarts cannot erase recent wording history. When all suitable variants are
+used or cannot fit, planning defers instead of forcing a duplicate or truncating
+evidence. Base drafts stay within 420 characters to leave room for decorations.
+The policy and world digest contribute to the prompt version. Old queued intents
+retain their original text and action history; new content applies prospectively.
