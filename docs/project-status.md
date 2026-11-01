@@ -1,30 +1,44 @@
 # Project status
 
-## Visibility strategy preparation — 1 November 2026
+## Deployed visibility strategy — 1 November 2026
 
-Authenticated portal counts are 74 registered, 43 banned, maximum total 200 and
-maximum active 50. All 43 suspension IDs were reconciled from the private team
-activity export. Eight previously unidentified current-session bans are now
-durably quarantined, leaving 30 controlled eligible sessions. The 19-slot
-headroom permits 49 controlled active accounts plus the original uncontrolled one.
+The authenticated portal confirms 93 registered, 43 banned, maximum total 200 and
+maximum active 50 after 19 verified replacement registrations. All 43 suspension
+IDs were reconciled; eight previously unidentified bans were quarantined. The
+controller now has 49 configured and eligible sessions; the original uncontrolled
+account occupies the remaining team slot. All 92 historical controlled identities
+remain in campaign history and blue-team exclusions.
 
 The prior mandate expired at 00:45 Sydney today and stopped new planning and claims.
 The user's new visibility request is scoped to the verified competition close,
 2 November at 18:00 Sydney. Explicit audited renewal preserves namespace, the
-8,640-attempt cap and all history. Default engagement remains off; implementation
-adds bounded own-post likes/reposts/reviewed comments, secondary reviewed NPC
-support, actual ranked snapshots and positive-only ambiguity reconciliation.
+8,640-attempt cap and all history. The explicit stopped-worker audit records the
+new window from `2026-11-01T05:34:52.347603Z` to `2026-11-02T07:00:00Z`. Default
+engagement remains off; the private deployment enables own-post engagement,
+reviewed NPC support, ranked snapshots and positive-only ambiguity reconciliation.
 
-Independent review, 381 unit tests and six focused dedicated-Postgres cases pass.
-Deployment, the audited new window and the 19-account replenishment follow after
-the verified stage is committed. No current Trending placement or score gain is
-claimed from these software checks.
+Code `b4ff327` passed 381 unit and 58 hosted Postgres integration cases. Follow-up
+`a127706` passed 381 unit and 59 integration cases, lint/format, mypy and
+infrastructure checks. Migration 0009 is installed. Workers run on gaming-pc,
+healthy and unpaused without automatic restarts; no Railway worker was created.
+Blue collection/scoring is fresh with automatic reports still off. Private
+mode-0600 recovery/environment files and both authorized GitHub secrets are updated.
 
 A follow-up permits fresh unverified post rows from historically reviewed NPC
 authors, while rejecting unknown authors and any conflicting player evidence.
 Identity provenance is reloaded independently during reservation and execution;
-current body hashes, age and structure remain checked. The dedicated Postgres
-regression passes. Deployment verification is ongoing.
+current body hashes, age and structure remain checked. The deployment permits up
+to 48 distinct peer likes, one repost and one reviewed comment per own target,
+with 120 engagement reservations/hour, the existing 180 combined attempts/hour,
+the 30-second publication floor and the unchanged cumulative cap. Original-post
+minimum spacing is 180 seconds; acknowledged own boosts receive priority.
+
+Live checks observed an accepted original, at least 16 accepted cross-account
+likes, a repost and a reviewed own-post comment, including replacement actors.
+These are execution receipts, not NPC points. No own top-20 Trending placement
+was present in the checked snapshots. No supportive NPC candidate passed the
+strict policy in the final bounded scan; that lane remains enabled when eligible
+content appears. No Trending or score gain is promised from software checks.
 
 ## Second replenishment — 31 October 2026
 

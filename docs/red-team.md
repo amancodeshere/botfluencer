@@ -20,11 +20,11 @@ own-post engagement and reviewed supportive NPC targets. It retains the sole
 publisher, action history and budgets. A fresh user request can authorize a new
 bounded window through an explicit stopped-worker audit; startup never renews it.
 
-## Current 50-session campaign
+## Current 49-session deployment
 
-The current deployment configures 50 verified sessions, including nine newly
-registered replacements. Eight unavailable controlled accounts are retired from
-the session roster; all 58 controlled identities remain in campaign history and
+The current deployment configures 49 verified sessions, including 19 new
+replacements. All 43 banned controlled accounts are retired from the session
+roster; all 92 controlled identities remain in campaign history and
 own-account exclusions. The team's original account remains outside this
 controller pending its credentials. The same team-wide three
 publication writes per minute covers all posts, replies/comments and reposts.
@@ -81,7 +81,7 @@ startup still rejects unreviewed configuration replacement.
 
 Additional private settings: `RED_WORLD_CONTEXT_FILE`, `RED_MAX_WORLD_AGE_HOURS`
 (6), `RED_IDENTITY_TIMEOUT_SECONDS` (600), `RED_MAX_PENDING_ACTIONS` (4), and
-`RED_POST_INTERVAL_SECONDS` (300 by default, minimum 20, now deployed at 20).
+`RED_POST_INTERVAL_SECONDS` (300 by default, minimum 20, now deployed at 180).
 This is a minimum original-post interval, not an account-specific quota. A
 namespace-scoped snapshot of the latest planned action gives eligible NPC replies
 a turn after originals, even when planning takes longer than the interval.
