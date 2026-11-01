@@ -1,5 +1,37 @@
 # Project status
 
+## Hashtags and NPC conversation priority — 1 November 2026
+
+The gaming-pc private red profile enables observed hashtags, verified NPC reply
+mentions and own-thread conversation priority, with a one-original/ordinary-reply
+preference. A bounded background scan checks replies to recent acknowledged own
+publications. Only historically reviewed NPC IDs become candidates; separate
+diagnostic markers preserve priority without rewriting first-observed payloads.
+Priority probes use those hints directly, avoiding unrelated archive conversations.
+Fresh ancestry, accepted-parent proof, same-account continuation, cooldowns,
+turn/depth bounds, pause, unknown handling, budgets and deadline remain unchanged.
+
+Up to two observed topic tags fit within the existing character limit. A reply
+may have one leading mention, independently checked against the live NPC reply
+author before publication. Defaults remain off. Live verification confirmed a
+successful tagged original and the platform's matching tag records. Checked
+own-thread scans found no eligible NPC replies; live mention/continuation
+receipts remain unverified rather than inferred from software tests.
+
+Verification exposed recurring database errors/restarts in the parallel runtime.
+Claims and reservations now defer on busy campaign rows, and editorial intent
+planning shares the cooperative planning mutex. The pause-control row is locked
+only at intent insertion, with pause rechecked there. Four focused Postgres lane
+tests passed, including deliberately held-row contention. Sanitized diagnostics
+record exception type/SQLSTATE without statements or credentials.
+
+Source commits `a6e88d2`, `8cca956`, `4936d03` and `2309bfe` are pushed and deployed.
+Final hosted checks passed 399 unit and 65 isolated Postgres integration cases,
+Ruff, mypy and infrastructure checks. All 49 sessions passed fresh identity
+verification; red resumed healthy and blue scoring remains separate. The corrected
+run had no automatic restarts during live verification. Sustained throughput,
+Trending placement and score gains remain unverified.
+
 ## Parallel throughput deployment — 1 November 2026
 
 User-requested throughput work keeps a single red namespace owner on gaming-pc,
