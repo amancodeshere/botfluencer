@@ -421,14 +421,26 @@ class RedStore(Repository):
             reserved = exists().where(
                 RedTarget.scope == self.scope, RedTarget.post_id == NPCPost.post_id
             )
-            own_hint = exists().where(
-                Observation.namespace == self.namespace,
-                or_(
-                    Observation.external_id == sql_cast(NPCPost.post_id, String),
-                    Observation.external_id == "own-response:" + sql_cast(NPCPost.post_id, String),
-                ),
-                Observation.payload["metadata"]["own_parent_candidate"].as_boolean().is_(True),
+            # Resolve a bounded priority set once, rather than correlating a marker
+            # lookup against every reply in the shared archive during sorting.
+            hint_keys = await session.scalars(
+                select(Observation.external_id)
+                .where(
+                    Observation.namespace == self.namespace,
+                    Observation.external_id.like("own-response:%"),
+                    Observation.observed_at >= func.now() - timedelta(hours=4),
+                    Observation.payload["metadata"]["own_parent_candidate"].as_boolean().is_(True),
+                )
+                .order_by(Observation.observed_at.desc(), Observation.id)
+                .limit(64)
             )
+            hint_ids = [
+                int(key.split(":", 1)[1])
+                for key in hint_keys
+                if key.split(":", 1)[1].isascii()
+                and key.split(":", 1)[1].isdecimal()
+                and 0 < int(key.split(":", 1)[1]) < 2**63
+            ]
             rows = await session.scalars(
                 select(NPCPost)
                 .where(
@@ -443,7 +455,9 @@ class RedStore(Repository):
                     ~reserved,
                 )
                 .order_by(
-                    case((own_hint, 0), else_=1), NPCPost.time_stamp.desc(), NPCPost.post_id.desc()
+                    case((NPCPost.post_id.in_(hint_ids), 0), else_=1),
+                    NPCPost.time_stamp.desc(),
+                    NPCPost.post_id.desc(),
                 )
                 .limit(8)
             )
