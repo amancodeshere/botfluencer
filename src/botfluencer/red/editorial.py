@@ -8,7 +8,7 @@ from collections.abc import Sequence
 from botfluencer.domain import Draft, ObservationInput
 from botfluencer.red.world import WorldSource
 
-VERSION = "grounded-editorial-v1"
+VERSION = "grounded-editorial-v2"
 UNSAFE = re.compile(
     r"(?:ignore|forget|disregard).{0,30}(?:previous|instructions|rules|above)|"
     r"(?:system|developer|user|assistant)\s*:|system\s*prompt|developer\s*message|"
@@ -95,6 +95,11 @@ COMMENTS: dict[str, tuple[str, ...]] = {
         ),
         "My Yes position doesn't make every claim on my side reliable. Sources still matter.",
     ),
+    "community": (
+        "For people who took part: what worked, and what should change next time?",
+        "What would make this easier for more people to take part in?",
+        "Which local detail would you want the follow-up coverage to explore?",
+    ),
     "general": (
         "My support for Yes comes with a demand for clear rules and public review.",
         "I'm leaning Yes, while keeping the implementation open to scrutiny.",
@@ -105,12 +110,15 @@ TOPICS = (
     (
         "voting",
         (
-            r"\b(?:id|identity card)\b.{0,40}\bvote|electoral commission|"
+            r"\b(?:id|identity card)\b.{0,40}\bvote|"
             r"id requirements|ballot|polling station"
         ),
     ),
     ("process", r"campaign silence|quiet period"),
-    ("privacy", r"\bprivacy|data|certificate|records?|tracking\b"),
+    (
+        "privacy",
+        r"\b(?:privacy|personal data|data retention|data collection|data protection|tracking)\b",
+    ),
     ("exemptions", r"\bexemptions?|appeals?|exceptions?\b"),
     ("access", r"\baccess|venues?|schools?|ferr(?:y|ies)|business|queues?\b"),
     ("oversight", r"\boversight|transparen|spending|funding|council|moderation|networks?\b"),
@@ -127,18 +135,43 @@ QUESTIONS = {
     "correction": "How should the correction reach people who saw the warning?",
     "voting": "Which voting-process detail needs a clearer explanation?",
     "process": "Which claims deserve a source check before the vote?",
+    "community": "What should the next local update cover?",
     "general": "What would you want clarified before implementation?",
 }
 
 
 def topic(value: str, *, article: bool = False) -> str:
     if re.search(
+        r"\b(?:markets?|festivals?|concerts?|sports?|football|harvest|arts)\b", value, re.I
+    ) and not re.search(r"\bh2d2\b|vaccin|referendum|mandate|privacy|exemption", value, re.I):
+        return "community"
+    if re.search(
         r"false alarm|retract|corrected|correction|contamination", value, re.I
     ) and not re.search(
         r"not (?:a )?false alarm|no.{0,10}contamination|not corrected", value, re.I
     ):
         return "correction"
-    return next((name for name, pattern in TOPICS if re.search(pattern, value, re.I)), "general")
+    matched = next((name for name, pattern in TOPICS if re.search(pattern, value, re.I)), None)
+    if matched is not None:
+        return matched
+    if (
+        not article
+        and re.search(r"\b(?:data|records|certificates?)\b", value, re.I)
+        and re.search(
+            r"\b(?:who|keep|kept|held|stored|deleted|collect|retention|sees?)\b", value, re.I
+        )
+    ):
+        return "privacy"
+    return "general"
+
+
+def campaign_source(source: WorldSource) -> bool:
+    if topic(source.title, article=True) == "community":
+        return False
+    return (
+        re.search(r"\bh2d2\b|vaccin|referendum|mandate", source.title + " " + source.text, re.I)
+        is not None
+    )
 
 
 def safe_quote(value: str, limit: int) -> str | None:
@@ -173,7 +206,7 @@ def render_grounded(
     )
     if UNSAFE.search(source.title + " " + source.text):
         raise ValueError("Source contains unreviewed instruction or advice language")
-    source_topic = topic(source.title, article=True)
+    source_topic = topic(source.title, article=True) if campaign_source(source) else "community"
     focus = source_topic
     quote = None
     if kind == "reply":

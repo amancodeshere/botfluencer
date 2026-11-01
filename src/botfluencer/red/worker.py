@@ -413,6 +413,14 @@ class RedWorker(Worker):
                     and time.monotonic() < discovery.tags_until
                 ):
                     tags = discovery.tags
+                if getattr(self.config, "grounded_content", False) and kind == "post":
+                    from botfluencer.red.editorial import campaign_source
+
+                    selected_source = next(
+                        s for s in world.sources if s.id == item.metadata["source_id"]
+                    )
+                    if not campaign_source(selected_source):
+                        tags = ()
                 username = None
                 if getattr(self.config, "mentions_enabled", False) and kind == "reply":
                     try:

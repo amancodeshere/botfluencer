@@ -466,3 +466,9 @@ used or cannot fit, planning defers instead of forcing a duplicate or truncating
 evidence. Base drafts stay within 420 characters to leave room for decorations.
 The policy and world digest contribute to the prompt version. Old queued intents
 retain their original text and action history; new content applies prospectively.
+
+Grounded editorial v2 distinguishes personal-record handling from record sales,
+and voting procedure from an electoral body's financial disclosures. Community
+stories get neutral community commentary and omit referendum hashtags. Explicit
+subject matter wins over ambiguous words such as records or data. Regression
+fixtures cover these distinctions; article evidence is still quoted verbatim.

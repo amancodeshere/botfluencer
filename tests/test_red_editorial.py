@@ -8,7 +8,7 @@ from botfluencer.red.world import WorldSource
 
 
 def source(
-    title="Harbour water result corrected after a false alarm",
+    title="Harbour vaccination signal corrected after a false alarm",
     text="Repeat tests corrected the earlier result.",
 ):
     return WorldSource(
@@ -181,3 +181,25 @@ def test_topic_free_reply_without_parent_context_seeks_clarification_instead_of_
     assert "?" in draft.text
     assert "Yes" not in draft.text
     assert "https://" not in draft.text
+
+
+def test_record_sales_and_commission_spending_do_not_become_privacy_or_voting_claims():
+    market = source(
+        title="Village bazaar sets record sales", text="Visitors supported the local stalls."
+    )
+    item = ObservationInput(external_id="post:10:2", text=market.title, source="news")
+    draft = render_grounded(market, item, account="10", kind="post")
+    assert "Yes" not in draft.text
+    assert "privacy" not in draft.text
+    assert "minimal records" not in draft.text
+    assert (
+        topic("Electoral Commission reports referendum campaign spending", article=True)
+        == "oversight"
+    )
+    assert topic("Village bazaar sets record sales", article=True) != "privacy"
+
+
+def test_financial_records_are_not_personal_records():
+    assert topic("Who publishes the campaign spending records?") == "oversight"
+    assert topic("Who keeps the records and when are they deleted?") == "privacy"
+    assert topic("Our festival broke records again") == "community"
