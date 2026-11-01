@@ -275,3 +275,62 @@ class RedCampaignRevision(Base):
     max_attempts: Mapped[int]
     reason: Mapped[str] = mapped_column(String(500))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class EngagementReservation(Base):
+    """Durable team-wide engagement intent, including ambiguous writes."""
+
+    __tablename__ = "engagement_reservations"
+    __table_args__ = (
+        UniqueConstraint("scope", "account", "target_id", "kind"),
+        UniqueConstraint("action_id"),
+        CheckConstraint("kind IN ('like','repost','team_reply')", name="engagement_kind"),
+        CheckConstraint("target_type IN ('own','npc')", name="engagement_target_type"),
+        Index("ix_engagement_target_kind", "scope", "target_id", "kind"),
+    )
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    scope: Mapped[str] = mapped_column(String(64))
+    account: Mapped[str] = mapped_column(String(64))
+    target_id: Mapped[int] = mapped_column(BigInteger)
+    kind: Mapped[str] = mapped_column(String(16))
+    author_id: Mapped[int] = mapped_column(BigInteger)
+    target_type: Mapped[str] = mapped_column(String(8))
+    action_id: Mapped[UUID] = mapped_column(ForeignKey("actions.id"))
+    source_action_id: Mapped[UUID | None] = mapped_column(ForeignKey("actions.id"))
+    body_hash: Mapped[str | None] = mapped_column(String(64))
+    root_id: Mapped[int | None] = mapped_column(BigInteger)
+    policy_version: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class TrendingSnapshot(Base):
+    """Ranked post identifiers only; never persists candidate content."""
+
+    __tablename__ = "trending_snapshots"
+    __table_args__ = (Index("ix_trending_snapshots_recent", "namespace", "observed_at"),)
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    namespace: Mapped[str] = mapped_column(ForeignKey("runtime_controls.namespace"))
+    ranked_ids: Mapped[list[int]] = mapped_column(JSONB)
+    ranks: Mapped[dict[str, int]] = mapped_column(JSONB)
+    observed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class RedMandateRevision(Base):
+    """Audited explicit restart of a campaign window without resetting its cap."""
+
+    __tablename__ = "red_mandate_revisions"
+    __table_args__ = (
+        CheckConstraint("previous_max_attempts = max_attempts", name="red_mandate_cap_unchanged"),
+    )
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    scope: Mapped[str] = mapped_column(String(64))
+    previous_starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    previous_ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    previous_max_attempts: Mapped[int]
+    max_attempts: Mapped[int]
+    reason: Mapped[str] = mapped_column(String(500))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

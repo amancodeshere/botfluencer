@@ -143,3 +143,21 @@ Timeouts, 5xx, interrupted calls and malformed acknowledgements remain unknown;
 only explicit pre-call deferrals and 429 responses allow safe retry. The fixed
 deadline is checked before claims and again before the HTTP write. Postgres remains
 on Railway, while a loopback-only systemd user service runs on gaming-pc.
+
+## Visibility actions and subsequent mandates
+
+The explicit engagement opt-in adds like, repost and reviewed team-comment drafts
+without enabling the generic CTN executor. Migration 0009 stores actor/target/kind
+reservations, observed rank snapshots and audited mandate revisions. The existing
+Decision/Action/Outcome/UsageEvent ledger and single publisher remain authoritative.
+Own targets need accepted original-post receipts; supportive NPC targets require
+reviewed provenance and conservative public-topic/stance checks. The executor
+reloads proof and verifies live author, structure, exact body and age before writes.
+Positive per-account state can reconcile likes/reposts; absence never permits an
+unknown write to be retried. Reconciliation polling uses persisted due times.
+
+An expired window can change only through an explicitly invoked, stopped-worker
+authorization that appends the previous/new window to an audit. The current cap,
+namespace, usage, unknown actions, reservations and historical identities survive.
+Old queued actions receive expiry outcomes. Normal startup never extends a window.
+See [visibility operations](trending.md) for contracts, bounds and settings.

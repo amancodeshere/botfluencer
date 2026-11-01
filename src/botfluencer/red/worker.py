@@ -7,11 +7,12 @@ from contextlib import suppress
 from typing import Literal
 
 from botfluencer.competition.errors import InvalidGeneration, RequestDeferred
-from botfluencer.domain import ObservationInput
+from botfluencer.domain import ActionStatus, ObservationInput
 from botfluencer.llm.mock import MockGenerator
 from botfluencer.platform.base import PermanentRejection, SafeRetry
 from botfluencer.red.config import RedSettings
 from botfluencer.red.conversation import Continuation
+from botfluencer.red.engagement_planner import EngagementPlanner
 from botfluencer.red.executor import ReplyExecutor
 from botfluencer.red.generator import ContextualGenerator
 from botfluencer.red.policy import draft_for, eligible, role_for
@@ -25,7 +26,14 @@ from botfluencer.storage.models import Observation
 class RedWorker(Worker):
     _prefer_ordinary = False
 
-    def __init__(self, repo: RedStore, executor: ReplyExecutor, config: RedSettings) -> None:
+    def __init__(
+        self,
+        repo: RedStore,
+        executor: ReplyExecutor,
+        config: RedSettings,
+        *,
+        engagement_planner: EngagementPlanner | None = None,
+    ) -> None:
         super().__init__(repo, executor, MockGenerator())
         self.store = repo
         self.executor = executor
@@ -33,6 +41,8 @@ class RedWorker(Worker):
         self._planner: asyncio.Task[None] | None = None
         self._prefer_ordinary = False
         self._conversation_targets: frozenset[str] = frozenset()
+        self.engagement_planner = engagement_planner
+        self._next_engagement_reconciliation = 0.0
 
     async def run(self, ticks: int | None = None) -> None:
         async with asyncio.timeout(self.config.identity_timeout_seconds):
@@ -46,6 +56,8 @@ class RedWorker(Worker):
                 for account in await self.store.historical_accounts() | set(self.settings.accounts)
             )
             self.executor.npc_author_ids = await self.store.npc_ids()
+            if self.engagement_planner is not None:
+                self.engagement_planner.npc_ids = self.executor.npc_author_ids
             if not self.executor.npc_author_ids:
                 raise ValueError("Reviewed NPC source archive is empty")
             if self.executor.transport.clock() < self.config.ends_at:
@@ -213,11 +225,43 @@ class RedWorker(Worker):
         return None
 
     async def plan_contextual(self) -> None:
+        planner = getattr(self, "engagement_planner", None)
+        if planner is not None:
+            try:
+                async with asyncio.timeout(self.settings.operation_timeout_seconds):
+                    if time.monotonic() >= self._next_engagement_reconciliation:
+                        self._next_engagement_reconciliation = time.monotonic() + 120
+                        for intent in await planner.store.unknown_engagements():
+                            result = await self.executor.reconcile(intent)
+                            if result.state == "applied" and result.receipt is not None:
+                                await self.store.finish(
+                                    intent,
+                                    ActionStatus.SUCCEEDED,
+                                    "reconciled",
+                                    result.receipt.model_dump(),
+                                )
+                                event("red_engagement_reconciled", action_id=str(intent.id))
+                    if await planner.prepare(own_only=True):
+                        return
+            except (RequestDeferred, SafeRetry, TimeoutError, ValueError):
+                # A cancelled database commit may already have reserved an intent.
+                # End this planning turn rather than create a second intent.
+                event("red_engagement_preparation_deferred")
+                return
+        if await self._plan_editorial() or planner is None:
+            return
+        try:
+            async with asyncio.timeout(self.settings.operation_timeout_seconds):
+                await planner.prepare(own_only=False)
+        except (RequestDeferred, SafeRetry, TimeoutError, ValueError):
+            event("red_support_preparation_deferred")
+
+    async def _plan_editorial(self) -> bool:
         try:
             async with asyncio.timeout(self.settings.operation_timeout_seconds):
                 path = self.config.world_context_file
                 if path is None or await self.store.is_paused():
-                    return
+                    return False
                 world = await asyncio.to_thread(load_world, path)
                 world.require_fresh(
                     self.executor.transport.clock(), self.config.max_world_age_hours
@@ -278,7 +322,7 @@ class RedWorker(Worker):
                 continuation = None
                 if reply is None:
                     if not original_due:
-                        return
+                        return False
                     slot = int(now.timestamp() // self.config.post_interval_seconds)
                     source = world.sources[slot % len(world.sources)]
                     item = ObservationInput(
@@ -297,13 +341,13 @@ class RedWorker(Worker):
                         account = parent_account
                     kind = "reply"
                 if observation is None:
-                    return
+                    return False
                 if (
                     getattr(self.config, "selector_mode", "llm") == "llm"
                     and continuation is None
                     and not await self.store.reserve_generation(account)
                 ):
-                    return
+                    return False
                 order = sorted(self.settings.accounts).index(account)
                 draft = await generator.generate(
                     item,
@@ -316,7 +360,7 @@ class RedWorker(Worker):
                     await self.store.is_paused()
                     or self.executor.transport.clock() >= self.config.ends_at
                 ):
-                    return
+                    return False
                 planned = await self.store.plan_reply(
                     observation.id,
                     int(item.metadata.get("author_id", 0)),
@@ -331,6 +375,7 @@ class RedWorker(Worker):
                         item.external_id,
                         "Team target/contact limit or campaign bound",
                     )
+                return planned
         except RequestDeferred as error:
             event("red_generation_deferred")
             await asyncio.sleep(min(error.seconds, 60))
@@ -339,6 +384,7 @@ class RedWorker(Worker):
             await asyncio.sleep(min(error.retry_after_seconds, 60))
         except (InvalidGeneration, ValueError, TimeoutError):
             event("red_generation_skipped")
+        return False
 
     async def contextual_tick(self) -> None:
         if self._planner is not None and self._planner.done():
@@ -367,7 +413,7 @@ class RedWorker(Worker):
         )
 
     async def tick(self) -> None:
-        if getattr(self.config, "use_model", False):
+        if getattr(self.config, "use_model", False) or getattr(self, "engagement_planner", None):
             await self.contextual_tick()
             return
         self.state.paused = await self.store.is_paused()

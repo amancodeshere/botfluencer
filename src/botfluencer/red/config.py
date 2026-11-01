@@ -31,6 +31,14 @@ class RedSettings(BaseSettings):
     max_pending_actions: int = Field(default=4, ge=1, le=8)
     post_interval_seconds: float = Field(default=300, ge=20)
     originals_per_reply: int = Field(default=1, ge=1, le=3)
+    engagement_enabled: bool = False
+    engagement_max_age_hours: float = Field(default=2, gt=0, le=2)
+    engagement_likes_per_target: int = Field(default=3, ge=0, le=49)
+    engagement_reposts_per_target: int = Field(default=1, ge=0, le=1)
+    engagement_comments_per_target: int = Field(default=1, ge=0, le=1)
+    engagement_max_per_hour: int = Field(default=100, ge=1, le=180)
+    engagement_scan_limit: int = Field(default=8, ge=1, le=16)
+    trending_refresh_seconds: float = Field(default=120, ge=30, le=600)
 
     @model_validator(mode="after")
     def bounded_window(self) -> "RedSettings":

@@ -702,6 +702,17 @@ class RedStore(Repository):
             now = cast(datetime, await session.scalar(select(func.now())))
             if not campaign.starts_at <= now < campaign.ends_at:
                 return False
+            if getattr(self.config, "engagement_enabled", False):
+                pending = await session.scalar(
+                    select(func.count())
+                    .select_from(Action)
+                    .where(
+                        Action.namespace == self.namespace,
+                        Action.status.in_(("queued", "in_flight")),
+                    )
+                )
+                if int(pending or 0) >= self.config.max_pending_actions:
+                    return False
             if continuation is not None:
                 if draft.kind != "reply" or not await self._valid_continuation(
                     session, continuation, account

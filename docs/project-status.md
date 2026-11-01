@@ -1,5 +1,25 @@
 # Project status
 
+## Visibility strategy preparation — 1 November 2026
+
+Authenticated portal counts are 74 registered, 43 banned, maximum total 200 and
+maximum active 50. All 43 suspension IDs were reconciled from the private team
+activity export. Eight previously unidentified current-session bans are now
+durably quarantined, leaving 30 controlled eligible sessions. The 19-slot
+headroom permits 49 controlled active accounts plus the original uncontrolled one.
+
+The prior mandate expired at 00:45 Sydney today and stopped new planning and claims.
+The user's new visibility request is scoped to the verified competition close,
+2 November at 18:00 Sydney. Explicit audited renewal preserves namespace, the
+8,640-attempt cap and all history. Default engagement remains off; implementation
+adds bounded own-post likes/reposts/reviewed comments, secondary reviewed NPC
+support, actual ranked snapshots and positive-only ambiguity reconciliation.
+
+Independent review, 381 unit tests and six focused dedicated-Postgres cases pass.
+Deployment, the audited new window and the 19-account replenishment follow after
+the verified stage is committed. No current Trending placement or score gain is
+claimed from these software checks.
+
 ## Second replenishment — 31 October 2026
 
 The user supplied a fresh portal snapshot: 72 registered, 24 banned, maximum

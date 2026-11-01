@@ -52,6 +52,11 @@ def main() -> None:
     red_commands.add_parser("serve", help="Run the explicitly enabled simulation campaign")
     amendment = red_commands.add_parser("amend", help="Audit an explicit paused campaign expansion")
     amendment.add_argument("--reason", required=True)
+    mandate = red_commands.add_parser(
+        "authorize-window", help="Audit a new bounded window after an expired mandate"
+    )
+    mandate.add_argument("--ends-at", required=True, help="Timezone-aware ISO 8601 end time")
+    mandate.add_argument("--reason", required=True)
     red_commands.add_parser("accounts", help="Inspect durable publishing account eligibility")
     quarantine = red_commands.add_parser(
         "quarantine", help="Disable a configured account without replacing its history"
@@ -133,6 +138,16 @@ def main() -> None:
                 from botfluencer.red.operator import amend
 
                 print(json.dumps(asyncio.run(amend(settings, RedSettings(), args.reason))))
+            elif args.red_operation == "authorize-window":
+                from botfluencer.red.operator import authorize_campaign_window
+
+                end = datetime.fromisoformat(args.ends_at.replace("Z", "+00:00"))
+                print(
+                    json.dumps(
+                        asyncio.run(authorize_campaign_window(settings, end, args.reason)),
+                        default=str,
+                    )
+                )
             elif args.red_operation in {"accounts", "quarantine"}:
                 from botfluencer.red.config import RedSettings
                 from botfluencer.red.operator import account_control

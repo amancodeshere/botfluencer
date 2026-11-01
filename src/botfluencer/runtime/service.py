@@ -95,10 +95,28 @@ async def serve(settings: Settings, *, red: bool = False) -> None:
             sessions = config.sessions(settings)
             transport = CompetitionTransport(settings, TeamPacer(database))
             repo = RedStore(database)
+            if config.engagement_enabled:
+                from botfluencer.red.engagement_store import EngagementStore
+
+                repo = EngagementStore(database)
             repo.config, repo.scope = config, transport.pacer.scope
-            worker = RedWorker(
-                repo,
-                ReplyExecutor(
+            executor = ReplyExecutor(
+                transport,
+                sessions,
+                npc_author_ids=frozenset(),
+                expected_team_id=config.expected_team_id,
+                ends_at=config.ends_at,
+                enabled=True,
+                allow_threads=config.allow_threads,
+            )
+            engagement_planner = None
+            if config.engagement_enabled:
+                from botfluencer.red.engagement_executor import EngagementExecutor
+                from botfluencer.red.engagement_planner import EngagementPlanner
+                from botfluencer.red.engagement_store import EngagementStore
+
+                assert isinstance(repo, EngagementStore)
+                executor = EngagementExecutor(
                     transport,
                     sessions,
                     npc_author_ids=frozenset(),
@@ -106,8 +124,14 @@ async def serve(settings: Settings, *, red: bool = False) -> None:
                     ends_at=config.ends_at,
                     enabled=True,
                     allow_threads=config.allow_threads,
-                ),
+                    authority_for_action=repo.authority_for_action,
+                )
+                engagement_planner = EngagementPlanner(repo, transport, config)
+            worker = RedWorker(
+                repo,
+                executor,
                 config,
+                engagement_planner=engagement_planner,
             )
         else:
             worker = build_worker(database)

@@ -44,6 +44,23 @@ scaffold does not estimate persuasion or score. NPC prompt injection is prohibit
 and can silently yield zero score. Keep activity inside the organiser's simulation.
 No publishing strategy, medical advice generator, or moderation evasion is built.
 
+## Visibility contract recheck — 1 November 2026
+
+The current organiser rules expressly allow in-simulation automation and separate
+fictional-platform conduct policies from competition restrictions. The scoring
+guide states that recent likes, replies and reposts affect Trending; only NPC
+engagement supplies Red points. Own-account amplification is a visibility
+experiment, not direct scoring or a guaranteed route to Trending. The authenticated
+portal shows the competition ending 2 November at 18:00 Australia/Sydney.
+
+SDK 0.5.0 likes use account-authenticated `POST /posts/{post_id}/like`. Reposts use
+`POST /posts` with `kind=repost` and `repost_of_post_id`; a second live repost by
+the same account conflicts. `GET /likes/mine?post_ids=...` returns `post_ids`;
+`GET /reposts/mine?post_ids=...` returns `reposts` entries with `post_id` and
+`repost_post_id`. Positive state can confirm the intended result. Absence cannot
+prove an ambiguous write was never applied. Existing team-wide budgets remain
+unchanged. See [visibility operations](trending.md) for the separate opt-in path.
+
 ## Red reply contract recheck — 30 October 2026
 
 The current rules permit automated interactions only inside the organiser's

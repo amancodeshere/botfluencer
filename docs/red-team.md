@@ -15,6 +15,11 @@ medical claims, profile people, infer demographics, or inject instructions into
 NPC prompts. Accepted API receipts do not establish persuasion,
 engagement, influence score, or strategy effectiveness.
 
+The separately opted-in [visibility strategy](trending.md) adds acknowledged
+own-post engagement and reviewed supportive NPC targets. It retains the sole
+publisher, action history and budgets. A fresh user request can authorize a new
+bounded window through an explicit stopped-worker audit; startup never renews it.
+
 ## Current 50-session campaign
 
 The current deployment configures 50 verified sessions, including nine newly
@@ -189,7 +194,10 @@ The campaign has timezone-aware start and end instants, with a positive duration
 of at most 48 hours. Its namespace, times, total cap, archive namespace, and
 account set are persisted under the team scope. Restarts cannot extend the end
 time, replace those values, or reset the caps. Only the audited, explicitly requested
-expansion command can add accounts or increase the cap. After expiry the process keeps
+expansion command can add accounts or increase the cap. The distinct
+`red authorize-window` command can record a newly authorized bounded mandate
+after expiry, retaining namespace, cap and history as described in
+[visibility operations](trending.md). After expiry the process keeps
 its heartbeat but makes no new observations or publication attempts. The context
 timer also stops making news requests once that same deadline passes. An existing
 campaign must not be deleted or given a new namespace to evade its mandate.

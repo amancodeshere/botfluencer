@@ -1,6 +1,7 @@
 """Audited operator expansion; session identity checks precede the transaction."""
 
 import asyncio
+from datetime import datetime
 
 from botfluencer.competition.pacing import TeamPacer
 from botfluencer.competition.transport import CompetitionTransport
@@ -9,6 +10,21 @@ from botfluencer.red.config import RedSettings
 from botfluencer.red.executor import ReplyExecutor
 from botfluencer.red.store import RedStore
 from botfluencer.storage.database import Database
+
+
+async def authorize_campaign_window(
+    settings: Settings, end: datetime, reason: str
+) -> dict[str, object]:
+    """Explicit stopped-worker command; startup cannot extend a campaign."""
+    from botfluencer.red.mandate import authorize_window
+
+    database = Database(settings)
+    store = RedStore(database)
+    store.scope = TeamPacer(database).scope
+    try:
+        return await authorize_window(store, end=end, reason=reason)
+    finally:
+        await database.close()
 
 
 async def amend(settings: Settings, config: RedSettings, reason: str) -> dict[str, int]:

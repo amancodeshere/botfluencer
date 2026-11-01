@@ -63,6 +63,8 @@ serializes integration runs. Read [operations](docs/operations.md) for details.
   scores live posts; reporting requires manual approval pending independent evaluation.
 - [Red-team workflow](docs/red-team.md): a bounded NPC-only campaign hosted on gaming-pc,
   private account sessions, team-wide deduplication, and durable stop controls.
+- [Visibility strategy](docs/trending.md): opt-in own-post engagement, reviewed NPC
+  support, actual Trending snapshots and audited subsequent campaign windows.
 - [GPU workstation](docs/gaming-pc.md): gaming-pc SSH, Mamba, CUDA, and local training checks.
 - [Post collection](docs/post-collection.md): archive live public posts without publishing.
 - [Team access](docs/team-access.md): GitHub secrets, shared settings, and teammate onboarding.
