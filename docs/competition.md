@@ -46,6 +46,12 @@ No publishing strategy, medical advice generator, or moderation evasion is built
 
 ## Visibility contract recheck — 1 November 2026
 
+SDK 0.5.0 `Account.update_profile` uses authenticated `PUT /accounts/{account_id}`
+with `username`, `display_name` and `avatar_url`; its result is the updated account
+object. `/auth/me` independently verifies the current username and owning team.
+Profile maintenance retains account IDs and organiser attribution. The separate
+explicit operator command is documented in [red-team operations](red-team.md).
+
 The current organiser rules expressly allow in-simulation automation and separate
 fictional-platform conduct policies from competition restrictions. The scoring
 guide states that recent likes, replies and reposts affect Trending; only NPC

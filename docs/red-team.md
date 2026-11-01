@@ -22,6 +22,34 @@ bounded window through an explicit stopped-worker audit; startup never renews it
 
 ## Current 49-session deployment
 
+### Profile maintenance
+
+The SDK supports authenticated `PUT /accounts/{account_id}` with `username`,
+`display_name` and the unchanged `avatar_url`. Account IDs and organiser team
+attribution remain intact. Renaming does not establish NPC origin, reset action
+history or protect an account from moderation.
+
+For an explicitly requested profile change, pause and stop the red worker, then
+run the following through the workstation launcher and private red environment:
+
+```sh
+botfluencer red rename-profiles --reason 'User-requested fictional profile names'
+botfluencer red rename-profiles --reason 'User-requested fictional profile names' --apply
+```
+
+The first command prepares a durable plan without profile writes. It selects
+only verified, eligible owned accounts with the generated `ctnsim_` prefix.
+Given and family names are recombined from reviewed NPC archive patterns;
+existing complete names, stored handles and occupied public handle prefixes are
+excluded. No credentials, biography or professional claims are generated.
+Migration 0010 stores intent and old/new names in a separate private Postgres
+audit ledger. The command requires namespace ownership and a paused campaign.
+Writes preserve avatars and require authenticated read-back. Interrupted or
+ambiguous changes are only positively reconciled, never blindly repeated.
+Resume only after verification and update the private recoverable credential
+record and its authorised GitHub secret with the new login usernames. Sessions
+and own-account exclusions remain keyed by the same IDs.
+
 The current deployment configures 49 verified sessions, including 19 new
 replacements. All 43 banned controlled accounts are retired from the session
 roster; all 92 controlled identities remain in campaign history and

@@ -334,3 +334,28 @@ class RedMandateRevision(Base):
     max_attempts: Mapped[int]
     reason: Mapped[str] = mapped_column(String(500))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class RedProfileRevision(Base):
+    """Operator profile intent; ambiguous writes are read-reconciled, never replayed."""
+
+    __tablename__ = "red_profile_revisions"
+    __table_args__ = (
+        UniqueConstraint("scope", "account", "previous_username"),
+        UniqueConstraint("scope", "username"),
+        CheckConstraint(
+            "status IN ('planned','in_flight','succeeded','unknown','rejected')",
+            name="red_profile_status",
+        ),
+    )
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    scope: Mapped[str] = mapped_column(String(64))
+    account: Mapped[str] = mapped_column(String(64))
+    previous_username: Mapped[str] = mapped_column(String(100))
+    previous_display_name: Mapped[str | None] = mapped_column(Text)
+    username: Mapped[str] = mapped_column(String(100))
+    display_name: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(16), default="planned")
+    reason: Mapped[str] = mapped_column(String(500))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

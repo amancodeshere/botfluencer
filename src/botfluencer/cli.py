@@ -58,6 +58,11 @@ def main() -> None:
     mandate.add_argument("--ends-at", required=True, help="Timezone-aware ISO 8601 end time")
     mandate.add_argument("--reason", required=True)
     red_commands.add_parser("accounts", help="Inspect durable publishing account eligibility")
+    profiles = red_commands.add_parser(
+        "rename-profiles", help="Plan or apply audited fictional names to generated CTN profiles"
+    )
+    profiles.add_argument("--reason", required=True)
+    profiles.add_argument("--apply", action="store_true", help="Explicitly perform profile writes")
     quarantine = red_commands.add_parser(
         "quarantine", help="Disable a configured account without replacing its history"
     )
@@ -146,6 +151,19 @@ def main() -> None:
                     json.dumps(
                         asyncio.run(authorize_campaign_window(settings, end, args.reason)),
                         default=str,
+                    )
+                )
+            elif args.red_operation == "rename-profiles":
+                from botfluencer.red.config import RedSettings
+                from botfluencer.red.profiles import rename_profiles
+
+                print(
+                    json.dumps(
+                        asyncio.run(
+                            rename_profiles(
+                                settings, RedSettings(), reason=args.reason, apply=args.apply
+                            )
+                        )
                     )
                 )
             elif args.red_operation in {"accounts", "quarantine"}:
