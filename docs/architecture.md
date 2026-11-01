@@ -177,3 +177,9 @@ permission. Replies use the actual NPC point and acknowledged parent context.
 Recent persisted publication intents provide restart-safe duplicate checks. The
 classic renderer remains the default; both use the same validated Draft, action
 ledger, freshness, pacing, pause and execution contracts.
+
+Parallel dispatcher admission uses the same fair in-process gate as intent
+reservation, releasing it before network execution. Publication admission is
+scheduled before like admission, and lanes without pending work do not start
+claim tasks. This avoids an idle like-claim storm starving eligible publications;
+HTTP execution remains concurrent within the configured bounds and team pacing.

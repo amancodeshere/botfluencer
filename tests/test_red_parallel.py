@@ -17,6 +17,9 @@ def worker_fixture():
     release = asyncio.Event()
 
     async def claim(*, kinds):
+        return kinds
+
+    async def execute(kinds):
         active[kinds] = active.get(kinds, 0) + 1
         maximum[kinds] = max(maximum.get(kinds, 0), active[kinds])
         entered.set()
@@ -27,7 +30,7 @@ def worker_fixture():
     now = datetime.now(UTC)
     store = SimpleNamespace(
         is_paused=AsyncMock(return_value=False),
-        pending_count=AsyncMock(return_value=0),
+        pending_count=AsyncMock(return_value=4),
         claim=AsyncMock(side_effect=claim),
         heartbeat=AsyncMock(),
     )
@@ -43,6 +46,7 @@ def worker_fixture():
     obj.executor = SimpleNamespace(transport=SimpleNamespace(clock=lambda: now))
     obj.id = "worker"
     obj.state = WorkerState()
+    obj._planner = None
     obj._parallel_tasks = {}
     obj._parallel_planners = {}
     obj.engagement_planner = None
@@ -50,7 +54,7 @@ def worker_fixture():
     obj._next_engagement_reconciliation = 0.0
     obj._parallel_publication_prefers_boost = False
     obj._parallel_plan_lock = asyncio.Lock()
-    obj.execute = AsyncMock()
+    obj.execute = AsyncMock(side_effect=execute)
     obj._plan_editorial = AsyncMock(return_value=False)
     return obj, store, entered, release, maximum
 
@@ -69,6 +73,12 @@ async def test_parallel_dispatch_claims_distinct_bounded_lanes_and_keeps_heartbe
         ("post", "reply", "repost", "team_reply"),
     }
     assert len(worker._parallel_tasks) == 5
+    assert store.claim.await_args_list[0].kwargs["kinds"] == (
+        "post",
+        "reply",
+        "repost",
+        "team_reply",
+    )
 
     release.set()
     await asyncio.gather(*worker._parallel_tasks.values())
@@ -144,3 +154,13 @@ async def test_background_tasks_stop_before_namespace_ownership_is_released() ->
     worker.id = "synthetic-worker"
     await worker.run(ticks=1)
     assert events == ["acquired", "tick", "stop_children", "released"]
+
+
+async def test_empty_lanes_do_not_launch_idle_claims():
+    worker, store, *_ = worker_fixture()
+    store.pending_count.return_value = 0
+    await worker._parallel_contextual_tick()
+    await asyncio.sleep(0)
+    store.claim.assert_not_awaited()
+    assert not worker._parallel_tasks
+    await worker.before_leadership_release()

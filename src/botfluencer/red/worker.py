@@ -585,7 +585,10 @@ class RedWorker(Worker):
             raise failure
 
     async def _dispatch_lane(self, lane: str, kinds: tuple[str, ...]) -> None:
-        intent = await self.store.claim(kinds=kinds)
+        # Serialize ledger admission, then release before parallel network execution.
+        # This is the same fair gate used by intent reservation, avoiding a like-claim storm.
+        async with self._parallel_plan_lock:
+            intent = await self.store.claim(kinds=kinds)
         if intent is not None:
             await self.execute(intent)
 
@@ -596,8 +599,8 @@ class RedWorker(Worker):
         active = self.config.starts_at <= self.executor.transport.clock() < self.config.ends_at
         if not self.state.paused and active:
             for lane, kinds in (
-                ("engagement", ("like",)),
                 ("publication", ("post", "reply", "repost", "team_reply")),
+                ("engagement", ("like",)),
             ):
                 pending = await self.store.pending_count(kinds=kinds)
                 if (
@@ -612,7 +615,7 @@ class RedWorker(Worker):
                     if lane == "engagement"
                     else 1
                 )
-                for index in range(concurrency):
+                for index in range(min(concurrency, pending)):
                     slot = f"{lane}:{index}"
                     if slot not in self._parallel_tasks:
                         self._parallel_tasks[slot] = asyncio.create_task(
