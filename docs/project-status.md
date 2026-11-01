@@ -1,5 +1,40 @@
 # Project status
 
+## Parallel throughput deployment — 1 November 2026
+
+User-requested throughput work keeps a single red namespace owner on gaming-pc,
+with eight bounded like dispatchers, one publication dispatcher and independent
+planning lanes. Blue remains its own gaming-pc service; Railway hosts only Postgres.
+The user selected more originals/NPC replies with limited reposts rather than
+48 reposts per original. Own targets allow 48 peer likes, one repost and one
+reviewed team comment; publication planning gives editorial and boosts turns.
+
+The private deployment sets 1,980 total attempts/hour, 1,800 engagement
+reservations/hour, 16 pending slots, 20-second publication spacing and 60-second
+original spacing. Shared platform buckets and server backoff remain authoritative;
+these are ceilings rather than measured sustained throughput. A paused verified
+amendment raised the cumulative cap from 8,640 to 50,000 without resetting usage,
+history, unknowns, disabled identities or the 2 November 18:00 Sydney deadline.
+The stopped-owner pacing adjustment retained the existing next-allowed timestamp.
+
+Kind-filtered claims use one campaign/control transaction, avoiding nested-pool
+exhaustion and preserving combined budgets. Half the pending queue is reserved
+for each lane. Fatal background task failures propagate, and children stop before
+namespace ownership is released. Serial mode remains the default.
+
+Blue now scores oldest eligible posts first. Its private profile targets a
+15-second cycle, two feed pages and 512 scores per cycle, batch size eight.
+Manual reporting remains required; automatic reporting is off. Report attempts
+allow up to 180/hour but retain approval, ownership, deduplication, moderator
+blocks and ambiguous-result handling. No unvalidated automatic reports were enabled.
+
+Code `b07416a` and test correction `74127ed` are pushed and installed. Independent
+review found no blockers. Final hosted checks passed 394 unit and 63 isolated
+Postgres integration tests, Ruff, mypy and infrastructure checks. Red passed fresh
+active readiness with 49 verified sessions and resumed; blue has a fresh scoring
+heartbeat. Both services remain active without automatic restarts. Sustained
+throughput, Trending placement and score improvements remain unverified.
+
 ## In-place profile rename — 1 November 2026
 
 All 49 controlled active profiles were renamed through the verified SDK account

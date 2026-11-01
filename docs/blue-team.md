@@ -147,7 +147,7 @@ Private configuration belongs in `~/.config/botfluencer/blue.env` (0600):
 | `BLUE_SCORE_LIMIT` / `BLUE_BATCH_SIZE` | defaults 128 / 8; installed 256 / 8; consider 512 / 8 for a larger backlog |
 | `BLUE_MAX_PAGES` | default 3; consider 4 as a catch-up ceiling when team feed usage leaves at least 2 reads/minute for others |
 | `BLUE_MAX_PENDING_REPORTS` | 1 unresolved submission |
-| `BLUE_MAX_REPORTS_PER_HOUR` | 3 attempted submissions, persisted team-wide |
+| `BLUE_MAX_REPORTS_PER_HOUR` | Default 3; throughput deployment 180 attempted submissions, persisted team-wide |
 
 Before enabling reports, configure the token/own IDs privately and review the
 current rules and candidate evidence. `blue approve --post-id ID` approves an
