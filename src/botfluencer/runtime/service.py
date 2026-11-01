@@ -108,6 +108,7 @@ async def serve(settings: Settings, *, red: bool = False) -> None:
                 ends_at=config.ends_at,
                 enabled=True,
                 allow_threads=config.allow_threads,
+                allow_mentions=config.mentions_enabled,
             )
             engagement_planner = None
             if config.engagement_enabled:
@@ -124,6 +125,7 @@ async def serve(settings: Settings, *, red: bool = False) -> None:
                     ends_at=config.ends_at,
                     enabled=True,
                     allow_threads=config.allow_threads,
+                    allow_mentions=config.mentions_enabled,
                     authority_for_action=repo.authority_for_action,
                 )
                 engagement_planner = EngagementPlanner(repo, transport, config)

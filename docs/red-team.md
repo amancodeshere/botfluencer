@@ -182,8 +182,9 @@ By default, only top-level NPC posts about the fictional referendum topics and
 at most four hours old are considered. The executor reads the target again
 before publishing and checks its author, kind, and thread root. A reply under
 another thread requires the explicit verified-ancestry setting described above.
-Reply bodies containing `@` are rejected because
-the platform automatically notifies mentioned accounts.
+Reply mentions are disabled by default. The explicit `RED_MENTIONS_ENABLED` opt-in
+allows one leading mention of the freshly verified NPC author being replied to.
+Originals and arbitrary additional mentions remain excluded.
 
 Discovery uses recent posts from the existing blue collector's Postgres archive,
 bounded to eight unseen candidates per tick. This avoids competitor traffic
@@ -394,3 +395,33 @@ restart limit requires operator investigation. The PC must remain awake and its
 existing WSL/Tailscale/SSH startup layer must work. Full Windows reboot recovery
 remains unverified as recorded in [gaming-pc.md](gaming-pc.md). This deployment
 does not change Windows sleep settings, startup tasks, or power policy.
+
+## Hashtags and own-thread NPC response priority
+
+`RED_HASHTAGS_ENABLED`, `RED_MENTIONS_ENABLED` and
+`RED_PRIORITIZE_CONVERSATIONS` default to false. With the parallel runtime, a
+bounded discovery task refreshes `GET /tags/popular` and checks up to two of the
+16 most recent acknowledged own posts/replies each minute, rotating between them.
+Each replies read uses the SDK `GET /posts/{id}/replies?limit=50`; coverage is
+bounded, not a complete inbox guarantee. All reads share team pacing.
+
+Up to two observed tags matching reviewed referendum topic vocabulary may be
+added to a draft. Arbitrary tag text is never published; no invented popularity
+or rank benefit is assumed. The cache expires after five minutes. Exact citations
+and optional GIFs stay intact; decorations are omitted if they cannot fit within
+500 characters. Actual decorations contribute to the persisted prompt version.
+
+Only replies from already reviewed NPC IDs, directly answering the acknowledged
+own publication, enter the priority scan. New archive rows remain unverified.
+Separate diagnostic observation markers preserve first-observed payloads and
+priority across restarts; they never authorize publishing. Fresh ancestry,
+accepted-parent proof, same-account continuation, pending-root blocks, cooldowns
+and turn/depth limits remain enforced. Conversations get first editorial discovery
+before ordinary replies and original-post scheduling.
+
+Mention opt-in permits a single leading `@username` in an NPC reply, using the
+current `/accounts/{author_id}` profile. Execution independently checks the live
+username against the verified reply author immediately before publication. Wrong,
+changed, unknown, own or extra addressees fail closed. There are no mass mentions
+or new notification-write endpoints; hashtags and mentions use the existing post
+body contract. Replies already notify the author through the platform.

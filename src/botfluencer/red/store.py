@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from typing import cast
 from uuid import UUID
 
-from sqlalchemy import String, exists, func, or_, select, text, true
+from sqlalchemy import String, case, exists, func, or_, select, text, true
 from sqlalchemy import cast as sql_cast
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -421,6 +421,14 @@ class RedStore(Repository):
             reserved = exists().where(
                 RedTarget.scope == self.scope, RedTarget.post_id == NPCPost.post_id
             )
+            own_hint = exists().where(
+                Observation.namespace == self.namespace,
+                or_(
+                    Observation.external_id == sql_cast(NPCPost.post_id, String),
+                    Observation.external_id == "own-response:" + sql_cast(NPCPost.post_id, String),
+                ),
+                Observation.payload["metadata"]["own_parent_candidate"].as_boolean().is_(True),
+            )
             rows = await session.scalars(
                 select(NPCPost)
                 .where(
@@ -434,7 +442,9 @@ class RedStore(Repository):
                     ~planned,
                     ~reserved,
                 )
-                .order_by(NPCPost.time_stamp.desc(), NPCPost.post_id.desc())
+                .order_by(
+                    case((own_hint, 0), else_=1), NPCPost.time_stamp.desc(), NPCPost.post_id.desc()
+                )
                 .limit(8)
             )
             return [

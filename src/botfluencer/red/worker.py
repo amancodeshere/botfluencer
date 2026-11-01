@@ -5,12 +5,15 @@ import hashlib
 import time
 from typing import Literal
 
-from botfluencer.competition.errors import InvalidGeneration, RequestDeferred
+import httpx
+
+from botfluencer.competition.errors import CompetitionHTTPError, InvalidGeneration, RequestDeferred
 from botfluencer.domain import ActionStatus, ObservationInput
 from botfluencer.llm.mock import MockGenerator
 from botfluencer.platform.base import PermanentRejection, SafeRetry
 from botfluencer.red.config import RedSettings
 from botfluencer.red.conversation import Continuation
+from botfluencer.red.discovery import ConversationDiscovery, decorate
 from botfluencer.red.engagement_planner import EngagementPlanner
 from botfluencer.red.executor import ReplyExecutor
 from botfluencer.red.generator import ContextualGenerator
@@ -42,6 +45,8 @@ class RedWorker(Worker):
         self._conversation_targets: frozenset[str] = frozenset()
         self.engagement_planner = engagement_planner
         self._next_engagement_reconciliation = 0.0
+        self.discovery = ConversationDiscovery(repo)
+        self._next_discovery = 0.0
         self._parallel_tasks: dict[str, asyncio.Task[None]] = {}
         self._parallel_planners: dict[str, asyncio.Task[None]] = {}
         self._parallel_publication_prefers_boost = False
@@ -297,8 +302,12 @@ class RedWorker(Worker):
                 discovery_timeout = asyncio.timeout(discovery_seconds)
                 try:
                     async with discovery_timeout:
+                        if getattr(self.config, "prioritize_conversations", False):
+                            reply = await self._conversation_reply()
                         originals_per_reply = getattr(self.config, "originals_per_reply", 1)
-                        if originals_per_reply > 1:
+                        if reply is not None:
+                            pass
+                        elif originals_per_reply > 1:
                             reply_turn = (
                                 not original_due
                                 or await self.store.original_streak() >= originals_per_reply
@@ -372,6 +381,30 @@ class RedWorker(Worker):
                     role=role_for(account, order=order),
                     conversation=continuation is not None,
                 )
+                tags: tuple[str, ...] = ()
+                discovery = getattr(self, "discovery", None)
+                if (
+                    getattr(self.config, "hashtags_enabled", False)
+                    and discovery is not None
+                    and time.monotonic() < discovery.tags_until
+                ):
+                    tags = discovery.tags
+                username = None
+                if getattr(self.config, "mentions_enabled", False) and kind == "reply":
+                    try:
+                        username = await self.executor.mention_username(
+                            int(item.metadata["author_id"])
+                        )
+                    except PermanentRejection:
+                        # Optional mentions never authorise or block a valid reply.
+                        username = None
+                if tags or username:
+                    draft = decorate(draft, tags, username)
+                    generator.prompt_version = hashlib.sha256(
+                        (
+                            generator.prompt_version + ":discovery-v1:" + str(tags) + str(username)
+                        ).encode()
+                    ).hexdigest()
                 if (
                     await self.store.is_paused()
                     or self.executor.transport.clock() >= self.config.ends_at
@@ -430,6 +463,25 @@ class RedWorker(Worker):
             paused=self.state.paused,
             campaign_active=active,
         )
+
+    async def _poll_discovery(self) -> None:
+        try:
+            async with asyncio.timeout(self.settings.operation_timeout_seconds):
+                count = await self.discovery.poll(
+                    self.executor.transport,
+                    self.executor.npc_author_ids,
+                    hashtags=getattr(self.config, "hashtags_enabled", False),
+                )
+                event("red_own_responses_observed", count=count)
+        except (
+            RequestDeferred,
+            SafeRetry,
+            TimeoutError,
+            ValueError,
+            CompetitionHTTPError,
+            httpx.TransportError,
+        ):
+            event("red_discovery_deferred")
 
     async def _parallel_prepare_lane(self, lane: str) -> None:
         planner = self.engagement_planner
@@ -528,6 +580,20 @@ class RedWorker(Worker):
                         self._parallel_tasks[slot] = asyncio.create_task(
                             self._dispatch_lane(slot, kinds), name=f"red-{slot}-dispatcher"
                         )
+        if (
+            not self.state.paused
+            and active
+            and (
+                getattr(self.config, "hashtags_enabled", False)
+                or getattr(self.config, "prioritize_conversations", False)
+            )
+            and "discovery" not in self._parallel_planners
+            and time.monotonic() >= self._next_discovery
+        ):
+            self._next_discovery = time.monotonic() + 60
+            self._parallel_planners["discovery"] = asyncio.create_task(
+                self._poll_discovery(), name="red-own-responses-discovery"
+            )
         await self.store.heartbeat(self.id)
         self.state.heartbeat_monotonic = time.monotonic()
         event(

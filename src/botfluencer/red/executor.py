@@ -50,6 +50,7 @@ class ReplyExecutor:
         ends_at: datetime,
         enabled: bool = False,
         allow_threads: bool = False,
+        allow_mentions: bool = False,
         disabled_accounts: set[str] | None = None,
         quarantine: Callable[[str, str], Awaitable[None]] | None = None,
         own_author_ids: frozenset[int] | None = None,
@@ -62,6 +63,7 @@ class ReplyExecutor:
         self.sessions = dict(sessions)
         self.enabled = enabled
         self.allow_threads = allow_threads
+        self.allow_mentions = allow_mentions
         self.disabled_accounts = set(disabled_accounts or ())
         self.quarantine = quarantine
         self.accepted_parent = accepted_parent
@@ -338,6 +340,21 @@ class ReplyExecutor:
                 raise PermanentRejection("Fresh continuation differs from its persisted authority")
         return proof
 
+    async def mention_username(self, author_id: int) -> str:
+        from botfluencer.red.discovery import HANDLE
+
+        if author_id not in self.npc_author_ids or author_id in self._own_author_ids:
+            raise PermanentRejection("Mentions require a reviewed NPC reply author")
+        profile = await self._read_preflight(f"/accounts/{author_id}", wait_for_pacing=True)
+        if (
+            not isinstance(profile, dict)
+            or profile.get("account_id") != author_id
+            or not isinstance(profile.get("username"), str)
+            or HANDLE.fullmatch(profile["username"]) is None
+        ):
+            raise PermanentRejection("Invalid live NPC mention identity")
+        return str(profile["username"])
+
     async def execute(self, intent: ActionIntent) -> Receipt:
         self._require_enabled()
         session = self.sessions.get(intent.account)
@@ -350,8 +367,16 @@ class ReplyExecutor:
         self._require_session_active(session)
         if intent.draft.kind not in {"reply", "post"} or not intent.draft.text.strip():
             raise PermanentRejection("Only nonempty simulation posts and replies are supported")
+        mention = None
         if "@" in intent.draft.text:
-            raise PermanentRejection("Simulation publications cannot mention other accounts")
+            mention = re.match(r"^@([A-Za-z0-9_]{1,64}) ", intent.draft.text)
+            if (
+                not self.allow_mentions
+                or intent.draft.kind != "reply"
+                or intent.draft.text.count("@") != 1
+                or mention is None
+            ):
+                raise PermanentRejection("Only one verified NPC addressee may be mentioned")
         for match in re.finditer(r"(?:https?://|www\.)[^\s<>]+", intent.draft.text, re.IGNORECASE):
             url = match.group().rstrip(".,;:!?)]}")
             if url in ALLOWED_GIF_URLS:
@@ -423,6 +448,11 @@ class ReplyExecutor:
                 raise PermanentRejection("Persisted continuation authority is invalid") from None
             if current != validated_continuation:
                 raise PermanentRejection("Continuation authority changed before publication")
+        if mention is not None:
+            if mention.group(1) != await self.mention_username(
+                _positive_id(target.get("author_id"))
+            ):
+                raise PermanentRejection("Mention no longer matches the live NPC reply author")
         # Time may have advanced while waiting for the durable budget or target read.
         self._require_enabled()
         self._require_session_active(session)

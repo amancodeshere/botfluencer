@@ -100,3 +100,12 @@ account session bearer token, not the model's team code. The blue-team module
 implements only this narrow write and defaults to shadow operation; social
 publishing remains blocked. It does not infer a ruling from a hidden post or
 HTTP 404. Recheck rules again before enabling real reports.
+
+## Tags and mentions contract — 1 November 2026
+
+SDK 0.5.0 documents public `GET /tags/popular` (up to 15 names and post counts),
+`GET /posts/{id}/replies`, and automatic hashtag/mention extraction from published
+bodies. Replies and body mentions notify addressees. The platform guide permits
+four mentions per original and three per reply; the deployed opt-in is narrower,
+allowing one verified NPC reply addressee only. Discovery does not confer author
+identity or conversation authority. See the red-team runbook for bounded coverage.

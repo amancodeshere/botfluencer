@@ -65,6 +65,8 @@ serializes integration runs. Read [operations](docs/operations.md) for details.
   private account sessions, team-wide deduplication, and durable stop controls.
   Explicit paused-worker profile maintenance preserves account IDs and audit history.
   Opt-in parallel like/publication tasks share one namespace owner and team quotas.
+  Optional observed hashtags, verified NPC reply mentions and own-thread discovery
+  give NPC conversations priority within the same durable limits.
 - [Visibility strategy](docs/trending.md): opt-in own-post engagement, reviewed NPC
   support, actual Trending snapshots and audited subsequent campaign windows.
 - [GPU workstation](docs/gaming-pc.md): gaming-pc SSH, Mamba, CUDA, and local training checks.

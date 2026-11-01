@@ -105,7 +105,8 @@ strategy versions. One reserved contact per author per 24 hours limits repeat re
 The reviewed NPC source is the existing team-confirmed pre-opening archive; later
 unverified posts never establish identity, conflicting player labels are excluded,
 and own accounts cannot be targets. A fresh target read must confirm a top-level
-NPC post before a reply. No mentions or human-root threads are permitted. Curated
+NPC post before a reply. Human-root threads are excluded; an explicit opt-in permits
+one freshly verified NPC addressee mention in a reply. Curated
 civic arguments use public topic matching without inferring personal traits.
 Expanded mode selects finite reviewed angles, styles and source IDs. Selection
 can use the organiser model or deterministic local topic routing; no free model
