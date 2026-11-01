@@ -10,6 +10,7 @@ from pydantic import SecretStr
 from botfluencer.domain import Draft, ObservationInput
 from botfluencer.red.config import RedSettings
 from botfluencer.red.store import RedStore
+from botfluencer.storage.models import RedCampaign
 from botfluencer.storage.repository import Repository
 
 
@@ -80,7 +81,7 @@ async def test_lane_filters_share_hourly_and_campaign_attempt_caps(repo: Reposit
     store.config = red_config("archive-" + uuid4().hex, max_attempts=1)
     await store.initialize()
 
-    for identity, author, kind in ((301, 17, "reply"), (302, 18, "post")):
+    for identity, author, kind in ((301, 17, "like"), (302, 18, "post")):
         await store.observe(
             [
                 ObservationInput(
@@ -97,17 +98,29 @@ async def test_lane_filters_share_hourly_and_campaign_attempt_caps(repo: Reposit
             observed.id,
             author,
             "10",
-            Draft(kind=kind, target_id=str(identity), text="Synthetic reviewed reply"),
+            Draft(
+                kind=kind,
+                target_id=str(identity),
+                text="" if kind == "like" else "Synthetic reviewed reply",
+            ),
         )
 
     claims = await asyncio.gather(
-        store.claim(kinds=("reply",)),
+        store.claim(kinds=("like",)),
         store.claim(kinds=("post",)),
     )
     claimed = [claim for claim in claims if claim is not None]
     assert len(claimed) == 1
     assert await store.claim() is None
     assert await store.pending_count() == 2
+
+    # Raise only the campaign ceiling; the already consumed hourly slot remains shared.
+    async with repo.db.sessions.begin() as session:
+        campaign = await session.get(RedCampaign, store.scope)
+        assert campaign is not None
+        campaign.max_attempts = 10
+    repo.settings.max_actions_per_hour = 1
+    assert await store.claim() is None
 
 
 @pytest.mark.integration
