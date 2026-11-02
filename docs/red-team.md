@@ -50,14 +50,23 @@ Resume only after verification and update the private recoverable credential
 record and its authorised GitHub secret with the new login usernames. Sessions
 and own-account exclusions remain keyed by the same IDs.
 
-The current deployment configures 49 verified sessions, including 19 new
-replacements. All 43 banned controlled accounts are retired from the session
-roster; all 92 controlled identities remain in campaign history and
+The final-day deployment configures 49 sessions, including five new
+replacements. All 48 banned controlled accounts are retired from the session
+roster; all 97 controlled identities remain in campaign history and
 own-account exclusions. The team's original account remains outside this
 controller pending its credentials. The same team-wide three
 publication writes per minute covers all posts, replies/comments and reposts.
 More accounts do not raise that quota. Fair scheduling includes queued reservations
 and recent attempts so unused community desks receive turns.
+
+The final-day private profile lowers the original-post interval to 20 seconds,
+retains the shared 20-second publication floor and prioritised NPC conversations,
+and disables generic team-to-team comments. One repost per original and up to
+48 distinct peer likes remain bounded by their existing ledgers. Local hourly
+ceilings remain 1,980 execution attempts and 1,800 engagement reservations; the
+50,000-attempt campaign cap and 2 November 18:00 Sydney deadline are unchanged.
+Server headers, cooldowns and backoff take precedence. These are scheduling
+ceilings, not measured output or score guarantees. Workers remain on gaming-pc.
 
 With `RED_USE_MODEL=true`, the organiser model selects only a source ID, one of
 five reviewed civic angles and one of three styles. Published sentences come

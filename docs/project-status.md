@@ -1,5 +1,56 @@
 # Project status
 
+## Final-day replenishment — 2 November 2026
+
+The user-supplied portal activity export identified all 48 suspended accounts,
+including five lost since the previous roster. Those identities are quarantined;
+their action history, unknown outcomes and own-author exclusions remain intact.
+Five acknowledged replacement registrations bring the portal snapshot to 98
+registered and 48 banned. The controller's amended roster contains 49 sessions;
+the team's original account remains outside the controller. All 97 controlled
+historical identities are excluded by red and blue. Credentials remain private
+and the authorised GitHub credential/session secrets are updated.
+
+The final-day private profile sets a 20-second original-post interval and removes
+generic internal team comments, prioritising originals and verified NPC replies.
+One repost and up to 48 distinct peer likes per original retain durable caps.
+Shared server pacing, 1,980 hourly execution attempts, 1,800 hourly engagement
+reservations, the 50,000-attempt cumulative cap and the 18:00 Sydney deadline
+remain unchanged. More accounts do not increase platform quotas.
+
+All five replacement profile updates have authenticated readback confirmation,
+and recoverable credentials reflect their new fictional names. Gaming-pc startup
+freshly verified all 49 sessions; red is healthy and explicitly resumed. Blue is
+actively scoring with the expanded own-author exclusion set. Both services were
+active with zero automatic restarts during this deployment check. The world
+snapshot is fresh. The implementation is unchanged from the
+source revision that passed 416 unit and 66 isolated Postgres integration tests;
+Ruff, formatting and mypy were also rechecked for this maintenance stage.
+
+## Source-grounded commentary — 1 November 2026
+
+The opt-in grounded editorial mode anchors originals to a reviewed article and
+its evidence, rotates bounded formats, and checks the last 100 publication
+intents for repeated wording. Replies use the NPC's actual topic and an accepted
+own parent when available; unrelated article links are omitted. Untrusted quoted
+content cannot supply instructions. This local renderer makes no model calls.
+
+The second revision distinguishes financial records from personal data and local
+community news from referendum policy. Community originals omit campaign tags.
+Live review identified two misframed originals: both were corrected with durable
+edit intent, budget accounting and public readback confirmation. Two unexecuted
+drafts were retired with diagnostic outcomes. Original action history remains
+intact; the two edited originals' old engagement proof hashes fail closed.
+
+Publication claims now get admission before idle like claims under the cooperative
+planning mutex; network execution still proceeds concurrently outside that mutex.
+The existing account identities, pause state, quotas, deadline and moderation
+controls are retained. Source commits `21a14e3`, `7f69ab7` and `e9f3b2f` are pushed.
+Hosted checks passed 416 unit and 66 isolated Postgres integration tests, Ruff,
+mypy and infrastructure checks. The second revision is installed on gaming-pc.
+The previous handoff left red paused; final-day maintenance explicitly resumed
+it and verified successful original posts and likes. Blue remains independent.
+
 ## Hashtags and NPC conversation priority — 1 November 2026
 
 The gaming-pc private red profile enables observed hashtags, verified NPC reply
